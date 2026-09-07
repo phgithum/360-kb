@@ -160,6 +160,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
         <option value="6" data-page-node-id="lT7WpGCyAjHGlIZ1jz44AG">按页切（适合 pdf/ppt）</option>
       </select>
     </div>
+    <div class="row">
+      <label>单文件大小上限（MB）</label>
+      <input id="sMax" type="number" min="1" max="50" value="20">
+      <div class="tip">超过上限的文件会被拦截，防止知识库存储膨胀产生费用（1–50）。</div>
+    </div>
     <div class="row" data-page-node-id="l1WabaqGLgb9v2ue3M96Jj">
       <div class="chk" data-page-node-id="wqvBjZwUrYskpp3csJ0g4I">
         <label data-page-node-id="JUTtqPhEYSO7w4kTH0LJwu"><input type="checkbox" id="sImg" data-page-node-id="LG5qOpImwilU6LTkh0xW2f"> 上传时解析图片</label>
@@ -184,7 +189,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     <div class="row" data-page-node-id="OrzwseEsQYlYR6oPzBjKIh">
       <label data-page-node-id="StQOna4NYQ8Xaw8mC5nyOB">上传文件</label>
       <div class="drop" id="drop" onclick="document.getElementById('uFile').click()" data-page-node-id="phvGBRfWXtWqRZ9E5GYxw2">
-        点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / pptx / xlsx / csv
+        点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / ppt / pptx / xls / xlsx / csv，单个不超过设置里的大小上限（默认 20MB）<br>视频、图片等媒体文件会被自动拦截
       </div>
       <input type="file" id="uFile" multiple style="display:none" onchange="pickFiles(this.files)" data-page-node-id="0UhySwW18NqWBHz0JcrDFy">
       <div class="files" id="uFiles" data-page-node-id="2KgDu1yFs7ygiBE1gvqK8Z"></div>
@@ -209,14 +214,20 @@ const LS='kb_cfg_v1';
 // 只接入这些知识库（按 id）。留空 [] 表示显示全部。
 // 新建知识库后把它的 id 加进来即可，id 可在智谱后台或浏览器控制台查看。
 const KB_WHITELIST=['2096805006861918208'];
+// 上传白名单：只允许这些文档格式入库；视频/图片等一律拦截
+const OK_EXT=['md','txt','pdf','doc','docx','ppt','pptx','xls','xlsx','csv'];
+// 媒体扩展名（用于拦截带媒体直链的 URL）
+const MEDIA_EXT=['mp4','mov','avi','mkv','webm','flv','wmv','m4v','jpg','jpeg','png','gif','webp','bmp','svg','mp3','wav','m4a'];
 
-let S={key:'',libs:[],cats:null,sel:'ALL',recall:'keyword',topk:10,model:'glm-4.6',ktype:'1',pimg:false,auto:true};
+let S={key:'',libs:[],cats:null,sel:'ALL',recall:'keyword',topk:10,model:'glm-4.6',ktype:'1',pimg:false,auto:true,maxmb:20};
 let PENDING=[];
+let REJECTED=[];
 const $=id=>document.getElementById(id);
 
 function loadCfg(){
   try{const c=JSON.parse(localStorage.getItem(LS)||'{}');S=Object.assign(S,c);}catch(e){}
   $('sKey').value=S.key||'';$('sModel').value=S.model;$('sType').value=S.ktype;
+  $('sMax').value=S.maxmb||20;
   $('sImg').checked=!!S.pimg;$('sAuto').checked=S.auto!==false;
   $('recall').value=S.recall;$('topk').value=String(S.topk);
 }
@@ -290,7 +301,8 @@ function scopeIds(){
 }
 function updScope(){
   const ids=scopeIds();
-  $('scope').textContent='当前范围：'+(S.sel==='ALL'?'全部知识库':S.sel.startsWith('C:')?'分类「'+S.sel.slice(2)+'」':kbName(S.sel.slice(2)))+' · 共 '+ids.length+' 个库 · 检索模式：'+$('recall').selectedOptions[0].text;
+  const docs=ids.reduce((n,id)=>n+((S.libs.find(k=>k.id===id)||{}).size||0),0);
+  $('scope').textContent='当前范围：'+(S.sel==='ALL'?'全部知识库':S.sel.startsWith('C:')?'分类「'+S.sel.slice(2)+'」':kbName(S.sel.slice(2)))+' · 共 '+ids.length+' 个库 · '+docs+' 个文档 · 检索模式：'+$('recall').selectedOptions[0].text;
 }
 
 async function doSearch(){
@@ -382,9 +394,27 @@ function openUpload(){
 }
 function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');}
 
-function pickFiles(fs){PENDING=PENDING.concat(Array.from(fs));renderFiles();}
+function pickFiles(fs){
+  const max=(S.maxmb||20)*1024*1024;
+  REJECTED=[];
+  for(const f of Array.from(fs)){
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(!OK_EXT.includes(ext)){
+      REJECTED.push(f.name+'（已拦截：'+(MEDIA_EXT.includes(ext)?'视频/音频/图片无法收入知识库':'不支持的格式')+'）');
+      continue;
+    }
+    if(f.size>max){
+      REJECTED.push(f.name+'（已拦截：超过 '+S.maxmb+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
+      continue;
+    }
+    PENDING.push(f);
+  }
+  renderFiles();
+}
 function renderFiles(){
-  $('uFiles').innerHTML=PENDING.length?PENDING.map(f=>'<div>'+esc(f.name)+' · '+(f.size/1024).toFixed(0)+' KB</div>').join(''):'';
+  let h=PENDING.map(f=>'<div>'+esc(f.name)+' · '+(f.size/1024).toFixed(0)+' KB</div>').join('');
+  h+=REJECTED.map(t=>'<div style="color:var(--err)">'+esc(t)+'</div>').join('');
+  $('uFiles').innerHTML=h;
 }
 const drop=$('drop');
 drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
@@ -401,12 +431,21 @@ function plog(msg,cls){
 
 async function doUpload(){
   const kb=$('uKb').value;
-  const urls=$('uUrl').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
-  if(!PENDING.length&&!urls.length){alert('请先选择文件或填写链接');return;}
+  const allUrls=$('uUrl').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+  const urls=[],badUrls=[];
+  for(const u of allUrls){
+    const ext=(u.split('?')[0].split('#')[0].split('.').pop()||'').toLowerCase();
+    (MEDIA_EXT.includes(ext)?badUrls:urls).push(u);
+  }
+  if(!PENDING.length&&!urls.length){
+    alert(badUrls.length?'所选链接都是视频/图片等媒体文件，已拦截（它们无法收入知识库）':'请先选择文件或填写链接');
+    return;
+  }
   const b=$('uBtn');b.disabled=true;
   $('uLog').innerHTML='<div class="log" id="lg"></div>';
   const lg=()=>$('lg');
   const L=(m,c)=>{const d=document.createElement('div');if(c)d.className=c;d.textContent=m;lg().appendChild(d);lg().scrollTop=lg().scrollHeight;};
+  badUrls.forEach(u=>L('已拦截媒体链接：'+u,'wn'));
 
   for(const f of PENDING){
     L('上传文件：'+f.name);
@@ -440,7 +479,7 @@ async function doUpload(){
   }
 
   L('全部提交完成。智谱需要一点时间做切片和向量化，稍后检索即可看到新内容。','wn');
-  PENDING=[];renderFiles();$('uUrl').value='';
+  PENDING=[];REJECTED=[];renderFiles();$('uUrl').value='';
   b.disabled=false;
   setTimeout(()=>loadLibs(true),3000);
 }
@@ -460,6 +499,7 @@ function saveSet(){
   S.key=$('sKey').value.trim();
   S.model=$('sModel').value.trim()||'glm-4.6';
   S.ktype=$('sType').value;
+  S.maxmb=Math.min(50,Math.max(1,+$('sMax').value||20));
   S.pimg=$('sImg').checked;
   S.auto=$('sAuto').checked;
   saveCfg();closeAll();
