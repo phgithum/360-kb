@@ -541,8 +541,13 @@ async function doUpload(){
     try{
       const fd=new FormData();
       fd.append('files',f);
-      fd.append('knowledge_type',CFG.ktype);
-      fd.append('sentence_size',String(CFG.ssize||300));
+      const ext=(f.name.split('.').pop()||'').toLowerCase();
+      const isImg=IMG_EXT.includes(ext);
+      if(!isImg){
+        // 图片必须省略 knowledge_type/sentence_size（让智谱自动识别），否则报"不支持的知识类型"
+        fd.append('knowledge_type',CFG.ktype);
+        fd.append('sentence_size',String(CFG.ssize||300));
+      }
       fd.append('parse_image',CFG.pimg?'true':'false');
       const r=await fetch(BASE+'/document/upload_document/'+kb,{
         method:'POST',headers:{'Authorization':'Bearer '+S.key},body:fd
