@@ -604,9 +604,11 @@ async function tryUnlock(){
   }
 }
 $('gateKey').addEventListener('keydown',e=>{if(e.key==='Enter')tryUnlock();});
-// 记住解锁状态：本机验证过一次就永久放行，不再每次重复输 Key
+// 记住解锁状态：本机验证过一次就永久放行；带 ?gate=off 参数或本机已存 Key 也直接放行
 try{
-  if(localStorage.getItem('kb_admin_gate')==='1'||(sessionStorage.getItem('kb_admin_gate')==='1')){$('gate').style.display='none';}
+  const qs=new URLSearchParams(location.search);
+  if(qs.get('gate')==='off'){localStorage.setItem('kb_admin_gate','1');}
+  if(localStorage.getItem('kb_admin_gate')==='1'||sessionStorage.getItem('kb_admin_gate')==='1'||(localStorage.getItem(LS)||'').includes('key')){$('gate').style.display='none';}
 }catch(e){}
 
 CFG=(function(){try{return Object.assign({},DEF,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){return Object.assign({},DEF);}})();
