@@ -99,7 +99,6 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
   <button onclick="openUpload()" data-page-node-id="bZRvU7rGNywxxjLP6xBNJr">上传知识</button>
-  <button onclick="window.open('admin.html')" data-page-node-id="bZRvU7rGNywxxjLP6xBNJr">后台管理</button>
   <button onclick="openSet()" data-page-node-id="W0srroshcWDIXEIUA8knLF">设置</button>
 </header>
 
@@ -154,7 +153,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     </div>
     <div class="row" data-page-node-id="iFjHz6sBjI89fTF7cJMwJp">
       <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">高级参数</label>
-      <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">知识库范围、格式白名单、大小上限、切片方式、AI 模型等参数已移到<a href="admin.html" target="_blank" style="color:var(--main)">专用后台</a>统一管理，修改后刷新本页生效。</div>
+      <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">知识库范围、格式白名单、大小上限、切片方式、AI 模型等参数由管理员在专用后台统一管理（后台不在前台提供入口）。</div>
     </div>
   </div>
   <div class="m-f" data-page-node-id="UzWrO4BmdSNfbP3rvzHwxU">
@@ -214,7 +213,8 @@ const DEF={
   topk:10,
   auto:true,
   access_mode:'open',
-  allowed_devices:[]
+  allowed_devices:[],
+  upload_pass:'12345678'
 };
 let CFG=Object.assign({},DEF);
 try{Object.assign(CFG,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){}
@@ -490,6 +490,9 @@ function plog(msg,cls){
 }
 
 async function doUpload(){
+  const pw=prompt('请输入上传密码：');
+  if(pw===null)return;
+  if(pw!==(CFG.upload_pass||'12345678')){alert('上传密码错误');return;}
   const kb=$('uKb').value;
   const allUrls=$('uUrl').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
   const urls=[],badUrls=[];
