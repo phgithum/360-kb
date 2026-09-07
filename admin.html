@@ -208,6 +208,27 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
   </div>
 
   <div class="card">
+    <h3>搜索统计（全平台）</h3>
+    <div class="sub">所有设备的检索词汇总到 GitHub 的 <b>360-kb-stats</b> 仓库，这里一键汇总排行。需要先填统计 token 并发布。</div>
+    <div class="row">
+      <label>统计仓库名</label>
+      <input id="aStatRepo" style="width:340px">
+    </div>
+    <div class="row">
+      <label>统计 Token（Fine-grained，只勾选 360-kb-stats 仓库 + Contents 读写）</label>
+      <input type="password" id="aStatTok" placeholder="粘贴统计专用 token">
+      <div class="tip">这个 token 会随配置发布到前台（前台要用它上报搜索词），所以<b>必须</b>用单独的 Fine-grained token、只授权统计仓库，绝不能复用主仓库的 token。生成：GitHub → Settings → Developer settings → Fine-grained tokens → Generate，Repository access 选 Only select repositories → 360-kb-stats，Permissions 里 Contents 选 Read and write。</div>
+    </div>
+    <div class="row">
+      <div class="inline">
+        <button class="pri" style="padding:5px 14px" onclick="viewStats(this)">汇总搜索排行</button>
+        <span class="tip" style="margin:0">统计所有已上报的搜索记录，按次数排序（前 100 名）</span>
+      </div>
+    </div>
+    <div class="row" id="statOut"><div class="tip" style="padding:4px">还没汇总过。先填好统计 token → 发布到全平台 → 各设备搜索后回来点「汇总搜索排行」。</div></div>
+  </div>
+
+  <div class="card">
     <h3>全平台发布</h3>
     <div class="sub">把当前配置写入 GitHub 仓库的 config.json，<b>所有设备</b>打开检索台约 1 分钟内自动生效。Token 只保存在你本机浏览器，不会进网页代码。</div>
     <div class="row">
@@ -263,7 +284,9 @@ const DEF={
   auto:true,
   access_mode:'open',
   allowed_devices:[],
-  upload_pass:'12345678'
+  upload_pass:'12345678',
+  stats_repo:'phgithum/360-kb-stats',
+  stats_token:''
 };
 let CFG=Object.assign({},DEF);
 let KBLIST=[];
@@ -321,6 +344,8 @@ function fillForm(){
   $('aAccess').value=CFG.access_mode||'open';
   $('aDevices').value=(CFG.allowed_devices||[]).join('\n');
   $('aUpass').value=CFG.upload_pass||'12345678';
+  $('aStatRepo').value=CFG.stats_repo||'phgithum/360-kb-stats';
+  $('aStatTok').value=CFG.stats_token||'';
   $('devCode').value=getDevId();
   renderExtBoxes();
   renderLimRows();
@@ -350,6 +375,8 @@ function collect(){
     access_mode:$('aAccess').value,
     allowed_devices:Array.from(new Set(devices)),
     upload_pass:$('aUpass').value.trim()||'12345678',
+    stats_repo:$('aStatRepo').value.trim()||'phgithum/360-kb-stats',
+    stats_token:$('aStatTok').value.trim(),
     recall:$('aRecall').value,
     topk:+$('aTopk').value||10,
     model:$('aModel').value.trim()||'glm-4.6',
@@ -358,6 +385,50 @@ function collect(){
     pimg:$('aPimg').checked,
     auto:$('aAuto').checked
   };
+}
+
+async function viewStats(btn){
+  const repo=$('aStatRepo').value.trim(),tok=$('aStatTok').value.trim();
+  if(!repo||!tok){alert('请先填统计仓库名和统计 Token');return;}
+  btn.disabled=true;btn.textContent='汇总中…';
+  const out=$('statOut');
+  out.innerHTML='<div class="tip" style="padding:4px">正在拉取统计记录…</div>';
+  try{
+    const H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json','User-Agent':'kb-stats'};
+    // 分页列出 data/ 目录全部小时文件
+    let files=[],page=1;
+    while(true){
+      const r=await fetch('https://api.github.com/repos/'+repo+'/contents/data?ref=main&per_page=100&page='+page,{headers:H});
+      if(!r.ok)throw new Error(r.status===404?'还没有任何搜索记录（data 目录不存在）':'HTTP '+r.status);
+      const list=await r.json();
+      if(!Array.isArray(list)||!list.length)break;
+      files=files.concat(list.filter(x=>x.type==='file'&&x.name.endsWith('.json')));
+      if(list.length<100)break;
+      page++;if(page>10)break;
+    }
+    // 逐文件读取并合并（最多取最近 200 个小时文件）
+    const agg={};
+    files=files.sort((a,b)=>a.name<b.name?1:-1).slice(0,200);
+    for(const f of files){
+      try{
+        const r=await fetch('https://api.github.com/repos/'+repo+'/contents/data/'+f.name+'?ref=main',{headers:H});
+        if(!r.ok)continue;
+        const j=await r.json();
+        const obj=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0))))||{};
+        for(const k of Object.keys(obj)){if(!agg[k])agg[k]={n:0};agg[k].n+=(obj[k]&&obj[k].n)||obj[k]||0;}
+      }catch(e){}
+    }
+    const rows=Object.keys(agg).map(k=>[k,agg[k].n]).sort((a,b)=>b[1]-a[1]).slice(0,100);
+    const total=rows.reduce((s,r)=>s+r[1],0);
+    if(!rows.length){out.innerHTML='<div class="tip" style="padding:4px">仓库里还没有统计数据（确认各设备已更新到最新版检索台并搜索过）</div>';return;}
+    out.innerHTML='<div class="tip" style="padding:4px 0">共 '+files.length+' 个时段文件 · '+total+' 次搜索 · '+rows.length+' 个不同词条（按次数排序）</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<tr style="text-align:left;color:#888"><td style="padding:4px 8px;border-bottom:1px solid #eee;width:40px">#</td><td style="padding:4px 8px;border-bottom:1px solid #eee">搜索词</td><td style="padding:4px 8px;border-bottom:1px solid #eee;width:90px">次数</td><td style="padding:4px 8px;border-bottom:1px solid #eee;width:60px">占比</td></tr>'
+      +rows.map((r,i)=>'<tr><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7">'+(i+1)+'</td><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7">'+esc(r[0])+'</td><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7"><b>'+r[1]+'</b></td><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7;color:#888">'+(total?(r[1]*100/total).toFixed(1):0)+'%</td></tr>').join('')
+      +'</table>';
+  }catch(e){
+    out.innerHTML='<div class="tip" style="padding:4px;color:#c00">统计失败：'+esc(e.message)+'</div>';
+  }finally{btn.disabled=false;btn.textContent='汇总搜索排行';}
 }
 
 async function loadKBs(){
