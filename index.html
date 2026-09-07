@@ -541,10 +541,54 @@ async function doUpload(){
     }catch(e){L('  出错：'+e.message,'er');}
   }
 
-  L('全部提交完成。智谱需要一点时间做切片和向量化，稍后检索即可看到新内容。','wn');
+  L('全部提交完成。智谱正在自动切片并建立检索索引，下方实时汇报进度：','wn');
   PENDING=[];REJECTED=[];renderFiles();$('uUrl').value='';
   b.disabled=false;
   setTimeout(()=>loadLibs(true),3000);
+  watchSlicing(kb);
+}
+
+// ============ 切片进度监控：上传后自动轮询文档处理状态 ============
+const STAT_TXT={0:'排队/切片中',1:'切片完成 ✓',2:'数据异常 ✗'};
+async function watchSlicing(kb){
+  const names=new Set();
+  // 先拿到刚上传的文档名单（按当前库内文档兜底+轮询期间新增的）
+  const seen={};
+  for(let round=0;round<30;round++){
+    try{
+      const r=await fetch(BASE+'/document?knowledge_id='+kb+'&page=1&size=100',{headers:{'Authorization':'Bearer '+S.key}});
+      const d=await r.json();
+      const list=(d.data&&d.data.list)||[];
+      let changed=false;
+      for(const it of list){
+        if(!seen[it.id]){seen[it.id]=true;changed=true;
+          const st=STAT_TXT[it.embedding_stat]!==undefined?STAT_TXT[it.embedding_stat]:('状态 '+it.embedding_stat);
+          L('  「'+(it.name||'未命名')+'」'+st,it.embedding_stat===1?'ok':(it.embedding_stat===2?'er':''));
+        }else if(it.embedding_stat!==1){
+          // 已见过但未完成：完成后补一条
+        }
+      }
+      if(changed&&round===0&&Object.keys(seen).length===0){
+        L('  正在读取文档列表…');
+      }
+      // 全部完成则收尾
+      const pending=list.filter(it=>it.embedding_stat!==1&&it.embedding_stat!==2).length;
+      const okN=list.filter(it=>it.embedding_stat===1).length;
+      const badN=list.filter(it=>it.embedding_stat===2).length;
+      if(pending===0){
+        if(okN)L('✓ 全部切片完成（'+okN+' 个文档可检索）','ok');
+        if(badN)L('✗ 有 '+badN+' 个文档数据异常（向量化失败），可在智谱后台查看详情','er');
+        if(okN||badN){
+          L('现在可以搜索了：命中的是切片后的内容片段，「打开原文」跳对应文档。','wn');
+          loadLibs(true);
+        }
+        return;
+      }
+      L('… '+pending+' 个文档仍在切片中');
+    }catch(e){/* 静默重试 */}
+    await new Promise(res=>setTimeout(res,10000));
+  }
+  L('监控超时（5 分钟），切片仍在后台进行，稍后可直接搜索。','wn');
 }
 
 async function testKey(){
