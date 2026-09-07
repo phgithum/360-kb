@@ -555,6 +555,34 @@ function flushStat(q){
   })();
 }
 
+// 设备登记：每台设备每次打开会话上报一次设备码到统计仓库，后台可看接入设备列表
+async function regDevice(){
+  try{
+    if(sessionStorage.getItem('kb_dev_reg')==='1')return;
+    const TOK=(CFG.stats_t1||'')+(CFG.stats_t2||'');
+    if(!CFG.stats_repo||!TOK)return;
+    sessionStorage.setItem('kb_dev_reg','1');
+    const H={'Authorization':'Bearer '+TOK,'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'kb-stats'};
+    const api='https://api.github.com/repos/'+CFG.stats_repo+'/contents/devices/'+encodeURIComponent(DEV_ID)+'.json';
+    let now=new Date().toLocaleString('zh-CN');
+    let body={message:'device',branch:'main',content:btoa(unescape(encodeURIComponent(JSON.stringify({id:DEV_ID,first:now,last:now,ua:navigator.userAgent.slice(0,120)}))))};
+    for(let i=0;i<3;i++){
+      try{
+        const r=await fetch(api,{headers:H});
+        if(r.status===200){
+          const j=await r.json();
+          const old=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/
+/g,'')),c=>c.charCodeAt(0))));
+          old.last=now;
+          body={message:'device',branch:'main',sha:j.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(old))))};
+        }else if(r.status!==404)throw new Error('HTTP '+r.status);
+        const w=await fetch(api,{method:'PUT',headers:H,body:JSON.stringify(body)});
+        if(w.status===200||w.status===201)return;
+        if(w.status!==409)return;
+      }catch(e){return;}
+    }
+  }catch(e){}
+}
 function hl(text,q){  const raw=String(text==null?'':text);
   // 1. 生成候选词：把查询串按分隔符拆开，再从每段里取出所有 >=2 字的连续子串
   const segs=q.split(/[\s,，。、？?！!]+/).filter(Boolean).slice(0,8);
@@ -1100,7 +1128,7 @@ loadPdfJs().catch(()=>{});
 loadMammoth().catch(()=>{});
 (async()=>{
   // 配置和知识库并行加载，互不等待；配置给检索默认值用，不阻塞主流程
-  pullRemote().then(()=>{S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;}).catch(()=>{});
+  pullRemote().then(()=>{S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;regDevice();}).catch(()=>{});
   if(accessDenied()){showDenied();return;}
   if(S.key&&CFG.auto!==false)loadLibs(true);
   else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
