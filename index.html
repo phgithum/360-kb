@@ -95,7 +95,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907h</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907i</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -141,8 +141,15 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <div class="modal" id="mFull" style="width:min(920px,94vw);height:min(88vh,900px)">
   <div class="m-h"><span id="fullTitle">查看全文</span><button onclick="closeAll()">&times;</button></div>
-  <div class="m-b" style="height:calc(100% - 52px);padding:0;overflow:hidden">
-    <div id="fullBody" style="width:100%;height:100%;overflow:auto;background:#fff"></div>
+  <div class="m-b" style="height:calc(100% - 52px);padding:0;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:6px;padding:7px 10px;border-bottom:1px solid var(--line2);align-items:center;flex:none;background:#fff;flex-wrap:wrap">
+      <input id="docFind" placeholder="在本文档中搜索…" style="flex:1;min-width:120px" onkeydown="if(event.key==='Enter')docFindNext(1)">
+      <button style="padding:4px 10px" onclick="docFindNext(-1)" title="上一个">↑</button>
+      <button style="padding:4px 10px" onclick="docFindNext(1)" title="下一个">↓</button>
+      <input id="docAsk" placeholder="问 AI：这份文档里…？" style="flex:1.4;min-width:160px" onkeydown="if(event.key==='Enter')aiAsk()">
+      <button style="padding:4px 12px;background:var(--main);color:#fff;border:0" onclick="aiAsk(this)">AI 问答</button>
+    </div>
+    <div id="fullBody" style="width:100%;flex:1;overflow:auto;background:#fff"></div>
   </div>
 </div>
 
@@ -295,10 +302,12 @@ function saveCfg(){localStorage.setItem(LS,JSON.stringify(S));}
 
 async function viewFull(el){
   const u=el.getAttribute('data-u'),t=el.getAttribute('data-t')||'查看全文';
+  const hit0=parseInt(el.getAttribute('data-p')||'0',10);
   $('fullTitle').textContent=t;
   $('mask').classList.add('on');
   $('mFull').classList.add('on');
   const body=$('fullBody');
+  $('docFind').value='';
   body.innerHTML='<div class="tip" style="padding:16px">加载中…</div>';
   try{
     if(/\.pdf$/i.test(t)){
@@ -307,29 +316,46 @@ async function viewFull(el){
       let doc=_docCache[u];
       if(!doc){const buf=await fileBuf(u);doc=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;_docCache[u]=doc;}
       body.innerHTML='';
+      // 先给每页放占位块（保持页序），命中页优先渲染并自动滚动到位
+      const holders={};
+      const start=Math.min(Math.max(1,hit0+1),doc.numPages);
+      const order=[start];
+      for(let p=1;p<=doc.numPages;p++)if(p!==start)order.push(p);
       for(let p=1;p<=doc.numPages;p++){
-        const page=await doc.getPage(p);
-        const vp0=page.getViewport({scale:1});
-        const vp=page.getViewport({scale:Math.min(860/vp0.width,2)});
-        const cv=document.createElement('canvas');
-        cv.width=vp.width;cv.height=vp.height;
-        cv.style.cssText='width:100%;max-width:860px;display:block;margin:0 auto 4px';
-        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-        body.appendChild(cv);
-        // 每页附可复制文字层
+        const h=document.createElement('div');
+        h.style.cssText='text-align:center;padding:6px 0;color:var(--tx3);font-size:12px';
+        h.textContent='第 '+p+' 页 · 加载中…';
+        holders[p]=h;body.appendChild(h);
+      }
+      let jumped=false;
+      for(const p of order){
         try{
-          const tc=await page.getTextContent();
-          const txt=tc.items.map(it=>it.str||'').join(' ').replace(/\s+/g,' ').trim();
-          if(txt){
-            const pre=document.createElement('div');
-            pre.style.cssText='max-width:860px;margin:0 auto 18px;padding:10px 14px;border:1px dashed var(--line2);border-radius:6px;font-size:13px;line-height:1.8;color:var(--tx2);white-space:pre-wrap;word-break:break-word;user-select:text';
-            pre.textContent=txt;
-            const lb=document.createElement('div');
-            lb.style.cssText='font-size:11px;color:var(--tx3);margin:0 auto 2px;max-width:860px';
-            lb.textContent='— 第 '+p+' 页文字版（可直接复制）—';
-            body.appendChild(lb);body.appendChild(pre);
-          }
-        }catch(e){}
+          const page=await doc.getPage(p);
+          const vp0=page.getViewport({scale:1});
+          const vp=page.getViewport({scale:Math.min(860/vp0.width,2)});
+          const cv=document.createElement('canvas');
+          cv.width=vp.width;cv.height=vp.height;
+          cv.style.cssText='width:100%;max-width:860px;display:block;margin:0 auto 4px';
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          const h=holders[p];h.innerHTML='';h.style.cssText='padding:0';
+          h.appendChild(cv);
+          // 每页附可复制文字层（文档内搜索也用它）
+          try{
+            const tc=await page.getTextContent();
+            const txt=tc.items.map(it=>it.str||'').join(' ').replace(/\s+/g,' ').trim();
+            if(txt){
+              const lb=document.createElement('div');
+              lb.style.cssText='font-size:11px;color:var(--tx3);margin:0 auto 2px;max-width:860px';
+              lb.textContent='— 第 '+p+' 页文字版（可直接复制）'+(p===start&&hit0>=0?' · 本次命中页':'')+'—';
+              const pre=document.createElement('div');
+              pre.className='pgtxt';pre.setAttribute('data-pg',p);
+              pre.style.cssText='max-width:860px;margin:0 auto 18px;padding:10px 14px;border:1px dashed var(--line2);border-radius:6px;font-size:13px;line-height:1.8;color:var(--tx2);white-space:pre-wrap;word-break:break-word;user-select:text';
+              pre.textContent=txt;
+              h.appendChild(lb);h.appendChild(pre);
+            }
+          }catch(e){}
+          if(p===start&&!jumped){jumped=true;h.scrollIntoView();}
+        }catch(e){holders[p].textContent='第 '+p+' 页渲染失败';}
       }
     }else if(/\.docx$/i.test(t)){
       await loadMammoth();
@@ -586,7 +612,7 @@ function renderResults(data,q){
       +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
       +(url?'<div class="c-prev" data-u="'+esc(url)+'" data-n="'+esc(m.doc_name||'')+'" data-p="'+(m.page_index!=null?m.page_index:0)+'"><div class="tip" style="padding:6px 2px">正在加载原文预览…</div></div>':'')
-      +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
+      +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" data-p="'+(m.page_index!=null?m.page_index:0)+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
       +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
       +'</div>'
       +(m.contextual_text?'<div class="c-ctx">'+esc(m.contextual_text)+'</div>':'')
@@ -650,10 +676,10 @@ function fetchDoc(url){
   return _docCache[url];
 }
 const _prevBoxH=300;
-function prevFooter(url,name){
+function prevFooter(url,name,hit){
   const f=document.createElement('div');
   f.style.cssText='position:absolute;bottom:0;left:0;right:0;padding:7px 10px;border-top:1px solid var(--line2);text-align:center;background:rgba(250,251,252,.96)';
-  f.innerHTML='<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+url.replace(/"/g,'&quot;')+'" data-t="'+(name||'').replace(/"/g,'&quot;')+'" style="font-weight:600">展开完整原文 📄</a>';
+  f.innerHTML='<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+url.replace(/"/g,'&quot;')+'" data-t="'+(name||'').replace(/"/g,'&quot;')+'" data-p="'+(hit||0)+'" style="font-weight:600">展开完整原文 📄</a>';
   return f;
 }
 async function renderPreview(box){
@@ -698,7 +724,7 @@ async function renderPreview(box){
       tip.className='tip';tip.style.padding='4px 8px';
       tip.textContent='原文缩略图：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页（横向滑动查看更多）';
       box.appendChild(tip);box.appendChild(wrap);
-      box.appendChild(prevFooter(url,name));
+      box.appendChild(prevFooter(url,name,hit0));
       box.scrollTop=0;
     }else if(/\.docx$/i.test(name)){
       await loadMammoth();
@@ -712,7 +738,7 @@ async function renderPreview(box){
       tip.className='tip';tip.style.padding='4px 8px';
       tip.textContent='docx 原文预览（转换显示，表格/图片样式可能简化）';
       box.appendChild(tip);
-      box.appendChild(prevFooter(url,name));
+      box.appendChild(prevFooter(url,name,hit0));
     }else if(/\.(md|txt|csv)$/i.test(name)){
       const buf=await fileBuf(url);
       const txt=new TextDecoder('utf-8').decode(buf);
@@ -720,7 +746,7 @@ async function renderPreview(box){
       wrap.style.cssText='padding:12px 16px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;font-family:inherit';
       wrap.textContent=txt.slice(0,20000)||'（空文档）';
       box.innerHTML='';box.appendChild(wrap);
-      box.appendChild(prevFooter(url,name));
+      box.appendChild(prevFooter(url,name,hit0));
     }else{
       box.innerHTML='<div class="tip" style="padding:8px">该格式（'+esc(name.split('.').pop())+'）不支持内嵌预览，请用「查看全文」或「新窗口打开」</div>';
     }
@@ -764,14 +790,111 @@ function clearCat(){S.cats=null;saveCfg();renderTree();updScope();}
 
 function openSet(){closeAll();$('mask').classList.add('on');$('mSet').classList.add('on');}
 
-async function clearFileCache(btn){
-  try{
+async function clearFileCache(btn){  try{
     if(window.caches){const c=await caches.open('kb-files-v1');const keys=await c.keys();await Promise.all(keys.map(k=>c.delete(k)));}
     for(const k of Object.keys(_docCache))delete _docCache[k];
     localStorage.removeItem('kb_scache');
     btn.textContent='已清除 ✓';
     setTimeout(()=>{btn.textContent='清文件缓存';},2000);
   }catch(e){alert('清除失败：'+e.message);}
+}
+
+// ============ 全文弹窗：文档内搜索 ============
+let _findHits=[],_findIdx=-1;
+function _clearMarks(root){
+  root.querySelectorAll('mark.docmark').forEach(m=>{
+    const t=document.createTextNode(m.textContent);
+    m.parentNode.replaceChild(t,m);
+  });
+  root.normalize();
+}
+function _markAll(root,term){
+  _clearMarks(root);
+  const lw=term.toLowerCase();
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
+  const targets=[];
+  let n;
+  while(n=walker.nextNode()){
+    if(n.parentNode.closest('mark'))continue;
+    if(n.nodeValue&&n.nodeValue.toLowerCase().includes(lw))targets.push(n);
+  }
+  for(const node of targets){
+    let txt=node.nodeValue,idx;
+    const frag=document.createDocumentFragment();
+    let pos=0;
+    const low=txt.toLowerCase();
+    while((idx=low.indexOf(lw,pos))!==-1){
+      if(idx>pos)frag.appendChild(document.createTextNode(txt.slice(pos,idx)));
+      const mk=document.createElement('mark');mk.className='docmark';
+      mk.style.cssText='background:#ffe58f;border-radius:2px';
+      mk.textContent=txt.slice(idx,idx+term.length);
+      frag.appendChild(mk);
+      pos=idx+term.length;
+    }
+    if(pos<txt.length)frag.appendChild(document.createTextNode(txt.slice(pos)));
+    node.parentNode.replaceChild(frag,node);
+  }
+}
+function docFindNext(dir){
+  const term=$('docFind').value.trim();
+  const body=$('fullBody');
+  if(!term)return;
+  if(_findHits.term!==term||!body.contains(_findHits[0])){
+    _markAll(body,term);
+    _findHits=Array.from(body.querySelectorAll('mark.docmark'));
+    _findHits.term=term;
+    _findIdx=dir>=0?-1:_findHits.length;
+  }
+  if(!_findHits.length){alert('文档里没有找到「'+term+'」');return;}
+  _findIdx=(_findIdx+dir+_findHits.length)%_findHits.length;
+  _findHits.forEach((m,i)=>m.style.background=i===_findIdx?'#ff9c6e':'#ffe58f');
+  const cur=_findHits[_findIdx];
+  cur.scrollIntoView({block:'center'});
+  $('fullTitle').textContent=$('fullTitle').textContent.replace(/ · \d+\/\d+$/,'')+' · '+(_findIdx+1)+'/'+_findHits.length;
+}
+
+// ============ 全文弹窗：AI 问答/总结（glm-4-flash 免费）============
+function _docText(){
+  const body=$('fullBody');
+  const pgs=body.querySelectorAll('.pgtxt');
+  let txt=pgs.length?Array.from(pgs).map(p=>p.textContent).join('\n'):(body.innerText||'');
+  return txt.replace(/\s+/g,' ').trim().slice(0,6000);
+}
+function _showAiBox(html){
+  const body=$('fullBody');
+  const old=body.querySelector('.ai-sum');if(old)old.remove();
+  const box=document.createElement('div');
+  box.className='ai-sum';
+  box.style.cssText='max-width:860px;margin:10px auto;padding:12px 16px;border:1px solid var(--main);border-radius:8px;background:#f6f9ff;font-size:13.5px;line-height:1.9;white-space:pre-wrap';
+  box.innerHTML='<b style="color:var(--main)">AI 回答</b>（glm-4-flash · 免费）<a href="javascript:void(0)" style="float:right;color:var(--tx3)" onclick="this.parentNode.remove()">关闭</a>\n'+html;
+  body.insertBefore(box,body.firstChild);
+  box.scrollIntoView({block:'nearest'});
+}
+async function _aiCall(system,user){
+  const r=await fetch(CHAT,{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json'},body:JSON.stringify({
+    model:'glm-4-flash',temperature:0.3,messages:[
+      {role:'system',content:system},
+      {role:'user',content:user}
+    ]})});
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.message||'模型调用失败');
+  return (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+}
+async function aiAsk(btn){
+  if(!S.key){alert('请先在设置里填写 API Key');return;}
+  const q=$('docAsk').value.trim();
+  if(!q){alert('先输入你想问的问题，比如「保修期多久」');return;}
+  const txt=_docText();
+  if(!txt){alert('文档没有可分析的文字内容');return;}
+  if(btn){btn.disabled=true;btn.dataset.old=btn.textContent;btn.textContent='思考中…';}
+  try{
+    const out=await _aiCall('你是文档问答助手。仅根据给定的文档内容用简体中文回答用户问题；文档里没有的信息就直说「文档中未提及」。回答简洁，可用要点列表。','【文档内容】\n'+txt+'\n\n【我的问题】'+q);
+    _showAiBox(esc(out));
+  }catch(e){
+    alert('AI 问答失败：'+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=btn.dataset.old||'AI 问答';}
+  }
 }
 function openUpload(){
   if(!S.libs.length){alert('请先加载知识库');return;}
