@@ -95,7 +95,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907f</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907g</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -304,7 +304,7 @@ async function viewFull(el){
       await loadPdfJs();
       // 复用预览时已下载的文档，秒开；没有缓存才重新下载
       let doc=_docCache[u];
-      if(!doc){doc=await pdfjsLib.getDocument({url:u}).promise;_docCache[u]=doc;}
+      if(!doc){const buf=await fileBuf(u);doc=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;_docCache[u]=doc;}
       body.innerHTML='';
       for(let p=1;p<=doc.numPages;p++){
         const page=await doc.getPage(p);
@@ -332,10 +332,10 @@ async function viewFull(el){
       }
     }else if(/\.docx$/i.test(t)){
       await loadMammoth();
-      const d=await window.mammoth.convertToHtml({arrayBuffer:await fetchDoc(u)});
+      const d=await window.mammoth.convertToHtml({arrayBuffer:await fileBuf(u)});
       body.innerHTML='<div style="padding:16px 24px;font-size:14px;line-height:1.9;max-width:860px;margin:0 auto">'+(d.value||'<span class="tip">此文档没有可显示的文本内容</span>')+'</div>';
     }else if(/\.(md|txt|csv)$/i.test(t)){
-      const txt=new TextDecoder('utf-8').decode(await fetchDoc(u));
+      const txt=new TextDecoder('utf-8').decode(await fileBuf(u));
       body.innerHTML='<pre style="padding:16px 24px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.8;font-family:inherit;max-width:860px;margin:0 auto">'+esc(txt)+'</pre>';
     }else{
       // 其他格式退回新窗口打开（浏览器自身能力）
@@ -627,6 +627,23 @@ function loadMammoth(){
   return _mammothP;
 }
 const _docCache={};
+// 持久缓存：文件下过一次就存进浏览器 Cache Storage，重开页面/重启浏览器都秒开
+async function fileBuf(url){
+  try{
+    if(window.caches){
+      const c=await caches.open('kb-files-v1');
+      let hit=await c.match(url);
+      if(!hit){
+        const resp=await fetch(url);
+        if(!resp.ok)throw new Error('HTTP '+resp.status);
+        await c.put(url,resp.clone());
+        hit=resp;
+      }
+      return await hit.arrayBuffer();
+    }
+  }catch(e){/* 缓存不可用就走普通下载 */}
+  return fetchDoc(url);
+}
 function fetchDoc(url){
   if(!_docCache[url])_docCache[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();});
   return _docCache[url];
@@ -647,7 +664,7 @@ async function renderPreview(box){
     if(/\.pdf$/i.test(name)){
       await loadPdfJs();
       let doc=_docCache[url];
-      if(!doc){doc=await pdfjsLib.getDocument({url}).promise;_docCache[url]=doc;}
+      if(!doc){const buf=await fileBuf(url);doc=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;_docCache[url]=doc;}
       const wrap=document.createElement('div');
       wrap.style.cssText='display:flex;gap:8px;padding:8px;overflow-x:auto;align-items:flex-start';
       box.innerHTML='';
@@ -684,7 +701,7 @@ async function renderPreview(box){
       box.scrollTop=0;
     }else if(/\.docx$/i.test(name)){
       await loadMammoth();
-      const buf=await fetchDoc(url);
+      const buf=await fileBuf(url);
       const d=await window.mammoth.convertToHtml({arrayBuffer:buf});
       const wrap=document.createElement('div');
       wrap.style.cssText='padding:12px 16px;font-size:13.5px;line-height:1.8';
@@ -696,7 +713,7 @@ async function renderPreview(box){
       box.appendChild(tip);
       box.appendChild(prevFooter(url,name));
     }else if(/\.(md|txt|csv)$/i.test(name)){
-      const buf=await fetchDoc(url);
+      const buf=await fileBuf(url);
       const txt=new TextDecoder('utf-8').decode(buf);
       const wrap=document.createElement('pre');
       wrap.style.cssText='padding:12px 16px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;font-family:inherit';
