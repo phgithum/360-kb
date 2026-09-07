@@ -313,6 +313,20 @@ async function viewFull(el){
         cv.style.cssText='width:100%;max-width:860px;display:block;margin:0 auto 4px';
         await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
         body.appendChild(cv);
+        // 每页附可复制文字层
+        try{
+          const tc=await page.getTextContent();
+          const txt=tc.items.map(it=>it.str||'').join(' ').replace(/\s+/g,' ').trim();
+          if(txt){
+            const pre=document.createElement('div');
+            pre.style.cssText='max-width:860px;margin:0 auto 18px;padding:10px 14px;border:1px dashed var(--line2);border-radius:6px;font-size:13px;line-height:1.8;color:var(--tx2);white-space:pre-wrap;word-break:break-word;user-select:text';
+            pre.textContent=txt;
+            const lb=document.createElement('div');
+            lb.style.cssText='font-size:11px;color:var(--tx3);margin:0 auto 2px;max-width:860px';
+            lb.textContent='— 第 '+p+' 页文字版（可直接复制）—';
+            body.appendChild(lb);body.appendChild(pre);
+          }
+        }catch(e){}
       }
     }else if(/\.docx$/i.test(t)){
       await loadMammoth();
