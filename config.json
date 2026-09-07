@@ -1,9 +1,7 @@
 {
   "name": "main",
   "config": {
-    "kb_whitelist": [
-      "2096886582564073472"
-    ],
+    "kb_whitelist": [],
     "ok_ext": [
       "md",
       "txt",
@@ -54,19 +52,19 @@
       "ppt": 50,
       "pptx": 50
     },
+    "access_mode": "open",
+    "allowed_devices": [],
+    "upload_pass": "12345678",
+    "stats_repo": "phgithum/360-kb-stats",
+    "stats_t1": "",
+    "stats_t2": "",
+    "recall": "mixed",
+    "topk": 10,
     "model": "glm-4.6",
     "ktype": "1",
     "ssize": 300,
     "pimg": false,
-    "recall": "mixed",
-    "topk": 10,
-    "auto": true,
-    "access_mode": "open",
-    "allowed_devices": [],
-    "upload_pass": "12345678"
+    "auto": true
   },
-  "updated_at": "2026-09-07T17:02:30+08:00",
-  "stats_repo": "phgithum/360-kb-stats",
-  "stats_t1": "github_pat_11BPM",
-  "stats_t2": "M2LQ0pcC5CZM099ln_tsTf7qUiPDHde22K25fPaPspEm7G0uX3sCoZF1B4yquFVIG3LBBuIlJXMrz"
+  "updated_at": "2026-09-07T14:33:14.114Z"
 }
