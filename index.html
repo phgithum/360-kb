@@ -490,7 +490,7 @@ async function doSearch(){
       if(ks.length>30)ks.sort((a,c)=>sc[a].t-sc[c].t).slice(0,ks.length-30).forEach(x=>delete sc[x]);
       localStorage.setItem('kb_scache',JSON.stringify(sc));
     }catch(e){}
-    if(!cached||JSON.stringify(d.data)!==JSON.stringify(cached))renderResults(d.data||[],q); // 有缓存时仅结果有变化才重绘
+    if(!cached)renderResults(d.data||[],q); // 缓存命中时已秒显，不再重绘
   }catch(e){
     if(!cached)$('list').innerHTML='<div class="empty" style="color:var(--err)">检索失败：'+esc(e.message)+'</div>';
   }finally{b.disabled=false;b.textContent='检索';}
@@ -936,8 +936,8 @@ $('recall').value=S.recall;$('topk').value=String(S.topk);
 loadPdfJs().catch(()=>{});
 loadMammoth().catch(()=>{});
 (async()=>{
-  await pullRemote();
-  S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;
+  // 配置和知识库并行加载，互不等待；配置给检索默认值用，不阻塞主流程
+  pullRemote().then(()=>{S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;}).catch(()=>{});
   if(accessDenied()){showDenied();return;}
   if(S.key&&CFG.auto!==false)loadLibs(true);
   else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
