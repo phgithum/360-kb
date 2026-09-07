@@ -104,7 +104,7 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
     <div class="row">
       <label>允许的设备码名单（每行一个）</label>
       <textarea id="aDevices" rows="4" placeholder="把设备码粘进来，每行一个"></textarea>
-      <div class="tip">切到白名单后，名单外的设备打开检索台会被拒绝并显示自己的设备码——同事把它发给你，粘进这里即可。注意：名单要<b>全平台生效</b>需要把配置固化进网页重新发布（导出配置发我即可）。</div>
+      <div class="tip">切到白名单后，名单外的设备打开检索台会被拒绝并显示自己的设备码——同事把它发给你，粘进这里即可。改完点「发布到全平台」即对所有人生效。</div>
     </div>
   </div>
 
@@ -192,9 +192,25 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
     </div>
   </div>
 
+  <div class="card">
+    <h3>全平台发布</h3>
+    <div class="sub">把当前配置写入 GitHub 仓库的 config.json，<b>所有设备</b>打开检索台约 1 分钟内自动生效。Token 只保存在你本机浏览器，不会进网页代码。</div>
+    <div class="row">
+      <label>GitHub Token（仅需本仓库 Contents 读写权限）</label>
+      <input type="password" id="ghToken" placeholder="粘贴 GitHub Token，只需填一次">
+    </div>
+    <div class="row">
+      <div class="inline">
+        <button class="pri" id="pubBtn" onclick="publishRemote()">发布到全平台</button>
+        <span class="tip" style="margin:0" id="pubTime"></span>
+      </div>
+      <div class="tip">发布前记得先点底部「保存配置」（保存 = 本机立即生效；发布 = 全平台生效）。</div>
+    </div>
+  </div>
+
   <div class="warnbox">
-    注意：配置保存在<b>本机浏览器的 localStorage</b>，对本机的检索台立即生效。
-    如果团队其他人也用这个网页，他们的浏览器会用「代码内置默认值」——需要全团队统一改默认值时告诉我，我把配置固化进网页代码重新发布。
+    两步工作流：<b>「保存配置」</b>= 只对本机检索台立即生效；<b>「发布到全平台」</b>= 写入 GitHub，所有设备打开检索台约 1 分钟内生效。
+    Token 只存本机浏览器。用完可随时去 GitHub → Settings → Developer settings 撤销。
   </div>
 
 </div>
@@ -395,8 +411,38 @@ function importCfg(f){
   r.readAsText(f,'utf-8');
 }
 
+// ============ 全平台发布：把配置写入 GitHub 仓库的 config.json ============
+const GH_OWNER='phgithum',GH_REPO='360-kb',GH_BRANCH='main';
+const GH_LS='kb_gh_token_v1';
+const GH_API='https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/config.json';
+const b64=s=>btoa(unescape(encodeURIComponent(s)));
+async function publishRemote(){
+  const tk=($('ghToken').value||'').trim();
+  if(!tk){alert('请先粘贴 GitHub Token（只需本仓库 Contents 读写权限），填一次以后一直记着。');return;}
+  try{localStorage.setItem(GH_LS,tk);}catch(e){}
+  const btn=$('pubBtn');btn.disabled=true;btn.textContent='发布中…';
+  try{
+    const cfg=collect();
+    const content=JSON.stringify({name:'main',config:cfg,updated_at:new Date().toISOString()},null,2);
+    let sha=null;
+    const g=await fetch(GH_API+'?ref='+GH_BRANCH,{headers:{'Authorization':'Bearer '+tk,'Accept':'application/vnd.github+json'}});
+    if(g.ok){sha=(await g.json()).sha;}
+    else if(g.status!==404)throw new Error('读取现有配置失败：HTTP '+g.status+'（检查 Token 权限）');
+    const r=await fetch(GH_API,{method:'PUT',
+      headers:{'Authorization':'Bearer '+tk,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify({message:'后台更新平台配置',content:b64(content),branch:GH_BRANCH,sha:sha})});
+    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t.slice(0,160));}
+    const now=new Date().toLocaleString();
+    $('pubTime').textContent='上次发布：'+now;
+    try{localStorage.setItem('kb_last_pub',now);}catch(e){}
+    alert('发布成功！所有设备打开检索台约 1 分钟内自动生效。');
+  }catch(e){alert('发布失败：'+e.message);}
+  finally{btn.disabled=false;btn.textContent='发布到全平台';}
+}
+
 CFG=(function(){try{return Object.assign({},DEF,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){return Object.assign({},DEF);}})();
 fillForm();
+try{$('ghToken').value=localStorage.getItem(GH_LS)||'';$('pubTime').textContent=localStorage.getItem('kb_last_pub')?('上次发布：'+localStorage.getItem('kb_last_pub')):'';}catch(e){}
 if(getKey()){$('aKey').value=getKey();setStatus(false,'已读取本机 Key，点「加载知识库列表」开始');}
 </script>
 </body>
