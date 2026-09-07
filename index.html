@@ -465,14 +465,34 @@ async function doSearch(){
   const ids=scopeIds();
   if(!ids.length){alert('没有选中任何知识库');return;}
   const b=$('btn');b.disabled=true;b.textContent='检索中';
-  $('list').innerHTML='<div class="empty">正在检索…</div>';
+  // 搜过的词直接用缓存秒出（10 分钟内有效），同时后台刷新
+  let cached=null;
+  try{
+    const sc=JSON.parse(localStorage.getItem('kb_scache')||'{}');
+    const ck=ids.join(',')+'|'+S.recall+'|'+q.toLowerCase();
+    if(sc[ck]&&Date.now()-sc[ck].t<600000)cached=sc[ck].d;
+  }catch(e){}
+  if(cached){
+    renderResults(cached,q);
+    b.disabled=false;b.textContent='检索';
+  }else{
+    $('list').innerHTML='<div class="empty">正在检索…</div>';
+  }
   try{
     const d=await api('/knowledge/retrieve',{method:'POST',json:1,body:JSON.stringify({
       query:q,knowledge_ids:ids,top_k:S.topk,top_n:Math.min(100,Math.max(S.topk*3,20)),recall_method:S.recall
     })});
-    renderResults(d.data||[],q);
+    try{ // 写入搜索结果缓存（最多存 30 条，超出淘汰最旧的）
+      const sc=JSON.parse(localStorage.getItem('kb_scache')||'{}');
+      const ck=ids.join(',')+'|'+S.recall+'|'+q.toLowerCase();
+      sc[ck]={t:Date.now(),d:d.data||[]};
+      const ks=Object.keys(sc);
+      if(ks.length>30)ks.sort((a,c)=>sc[a].t-sc[c].t).slice(0,ks.length-30).forEach(x=>delete sc[x]);
+      localStorage.setItem('kb_scache',JSON.stringify(sc));
+    }catch(e){}
+    if(!cached||JSON.stringify(d.data)!==JSON.stringify(cached))renderResults(d.data||[],q); // 有缓存时仅结果有变化才重绘
   }catch(e){
-    $('list').innerHTML='<div class="empty" style="color:var(--err)">检索失败：'+esc(e.message)+'</div>';
+    if(!cached)$('list').innerHTML='<div class="empty" style="color:var(--err)">检索失败：'+esc(e.message)+'</div>';
   }finally{b.disabled=false;b.textContent='检索';}
 }
 
@@ -909,6 +929,9 @@ $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
 $('devIdBox').textContent=DEV_ID;
+// 秒开：先用本地缓存渲染知识库树和上次搜索，网络回来再静默刷新
+if(S.libs&&S.libs.length){renderTree();updScope();setStatus(true,'缓存模式 · 正在同步…');}
+$('recall').value=S.recall;$('topk').value=String(S.topk);
 // 页面打开就后台预载 pdf.js / mammoth，搜索时预览零等待
 loadPdfJs().catch(()=>{});
 loadMammoth().catch(()=>{});
