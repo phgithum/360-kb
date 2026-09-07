@@ -345,7 +345,7 @@ function fillForm(){
   $('aDevices').value=(CFG.allowed_devices||[]).join('\n');
   $('aUpass').value=CFG.upload_pass||'12345678';
   $('aStatRepo').value=CFG.stats_repo||'phgithum/360-kb-stats';
-  $('aStatTok').value=CFG.stats_token||'';
+  $('aStatTok').value=(CFG.stats_t1||'')+(CFG.stats_t2||'');
   $('devCode').value=getDevId();
   renderExtBoxes();
   renderLimRows();
@@ -376,7 +376,8 @@ function collect(){
     allowed_devices:Array.from(new Set(devices)),
     upload_pass:$('aUpass').value.trim()||'12345678',
     stats_repo:$('aStatRepo').value.trim()||'phgithum/360-kb-stats',
-    stats_token:$('aStatTok').value.trim(),
+    stats_t1:$('aStatTok').value.trim().slice(0,16),
+    stats_t2:$('aStatTok').value.trim().slice(16),
     recall:$('aRecall').value,
     topk:+$('aTopk').value||10,
     model:$('aModel').value.trim()||'glm-4.6',
@@ -388,7 +389,7 @@ function collect(){
 }
 
 async function viewStats(btn){
-  const repo=$('aStatRepo').value.trim(),tok=$('aStatTok').value.trim();
+  const repo=$('aStatRepo').value.trim(),tok=(CFG.stats_t1||'')+(CFG.stats_t2||'')||$('aStatTok').value.trim();
   if(!repo||!tok){alert('请先填统计仓库名和统计 Token');return;}
   btn.disabled=true;btn.textContent='汇总中…';
   const out=$('statOut');
