@@ -95,7 +95,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907j</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907k</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -866,19 +866,29 @@ function _showAiBox(html){
   const box=document.createElement('div');
   box.className='ai-sum';
   box.style.cssText='max-width:860px;margin:10px auto;padding:12px 16px;border:1px solid var(--main);border-radius:8px;background:#f6f9ff;font-size:13.5px;line-height:1.9;white-space:pre-wrap';
-  box.innerHTML='<b style="color:var(--main)">AI 回答</b>（glm-4.7-flash · 免费）<a href="javascript:void(0)" style="float:right;color:var(--tx3)" onclick="this.parentNode.remove()">关闭</a>\n'+html;
+  box.innerHTML='<b style="color:var(--main)">AI 回答</b>（'+(_lastAiModel||'glm-4.7-flash')+' · 免费）<a href="javascript:void(0)" style="float:right;color:var(--tx3)" onclick="this.parentNode.remove()">关闭</a>\n'+html;
   body.insertBefore(box,body.firstChild);
   box.scrollIntoView({block:'nearest'});
 }
+const AI_MODELS=['glm-4.7-flash','glm-4-flash-250414','glm-4-flash']; // 免费模型接力：挤不上自动换下一个
 async function _aiCall(system,user){
-  const r=await fetch(CHAT,{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json'},body:JSON.stringify({
-    model:'glm-4.7-flash',temperature:0.3,thinking:{type:'disabled'},messages:[
-      {role:'system',content:system},
-      {role:'user',content:user}
-    ]})});
-  const d=await r.json();
-  if(d.error)throw new Error(d.error.message||'模型调用失败');
-  return (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+  let lastErr=null;
+  for(const model of AI_MODELS){
+    try{
+      const r=await fetch(CHAT,{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json'},body:JSON.stringify({
+        model:model,temperature:0.3,thinking:{type:'disabled'},messages:[
+          {role:'system',content:system},
+          {role:'user',content:user}
+        ]})});
+      const d=await r.json();
+      if(d.error){lastErr=new Error(d.error.message||'模型调用失败');continue;}
+      const out=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+      if(!out){lastErr=new Error('模型返回为空');continue;}
+      _lastAiModel=model;
+      return out;
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error('所有免费模型都不可用');
 }
 async function aiAsk(btn){
   if(!S.key){alert('请先在设置里填写 API Key');return;}
