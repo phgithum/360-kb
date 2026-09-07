@@ -420,6 +420,7 @@ function renderResults(data,q){
       +'<span class="c-kb">'+esc(kbName(m.knowledge_id))+'</span>'
       +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
+      +(url&&IMG_EXT.some(e=>String(m.doc_name||'').toLowerCase().endsWith('.'+e))?'<div style="margin:8px 0"><img src="'+esc(url)+'" alt="命中图片" style="max-width:100%;max-height:300px;border:1px solid var(--line);border-radius:6px" loading="lazy"></div>':'')
       +'<div class="c-f">'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">打开原文</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
       +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
       +'</div>'
