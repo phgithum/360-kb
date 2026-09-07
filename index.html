@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="gkNloZikvNwUg73yGutjmo">
+<head data-page-node-id="LmuIOgneLmVprcHGBR0pn9">
+<meta charset="utf-8" data-page-node-id="HmPB8zhLZwFZoGJWS2L6JK">
+<meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="1DeVBmC4QrLYSJSg8hWCl5">
+<title>知识库检索台</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --line:#e5e7eb; --line2:#eef0f3;
+  --tx:#1f2329; --tx2:#5f6672; --tx3:#98a0ad;
+  --main:#1677ff; --main-bg:#e8f2ff; --ok:#12a150; --warn:#d98200; --err:#d93026;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--tx);height:100vh;overflow:hidden}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--tx);padding:6px 14px;border-radius:6px}
+button:hover{border-color:#c9ced6;background:#fafbfc}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.pri{background:var(--main);border-color:var(--main);color:#fff}
+button.pri:hover{background:#0e63d6;border-color:#0e63d6}
+input,select,textarea{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--tx);background:#fff;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--main)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#d5d9e0;border-radius:4px}
+
+header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px;gap:12px}
+.logo{font-size:15px;font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:#c9ced6}
+.dot.on{background:var(--ok)}
+.hint{font-size:12px;color:var(--tx3)}
+.spacer{flex:1}
+
+.wrap{display:flex;height:calc(100vh - 52px)}
+aside{width:250px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.side-h{padding:12px 14px 8px;font-size:12px;color:var(--tx3);display:flex;align-items:center;justify-content:space-between}
+.side-b{flex:1;overflow-y:auto;padding:0 8px 12px}
+.grp{margin-bottom:4px}
+.grp-t{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx2)}
+.grp-t:hover{background:#f4f6f8}
+.grp-t.sel{background:var(--main-bg);color:var(--main);font-weight:500}
+.grp-n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{font-size:11px;color:var(--tx3);background:#f0f2f5;padding:1px 6px;border-radius:9px}
+.grp-t.sel .badge{background:#d6e8ff;color:var(--main)}
+.lib{display:flex;align-items:center;gap:7px;padding:6px 8px 6px 22px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx2)}
+.lib:hover{background:#f4f6f8}
+.lib.sel{background:var(--main-bg);color:var(--main)}
+.lib span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-f{padding:8px;border-top:1px solid var(--line2)}
+
+main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.searchbar{padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.searchbar input{font-size:14px;padding:9px 12px}
+.searchbar select{width:auto;min-width:110px}
+.scope{font-size:12px;color:var(--tx3);white-space:nowrap}
+.list{flex:1;overflow-y:auto;padding:16px 20px 40px}
+.empty{text-align:center;color:var(--tx3);padding:70px 20px;font-size:13px}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 15px;margin-bottom:10px}
+.card:hover{border-color:#cfd6de}
+.c-h{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap}
+.c-idx{font-size:12px;color:var(--tx3);min-width:18px}
+.c-doc{font-size:13px;font-weight:600;color:var(--tx)}
+.c-kb{font-size:11px;color:var(--tx2);background:#f0f2f5;padding:1px 7px;border-radius:4px}
+.c-sc{font-size:11px;color:var(--tx3);margin-left:auto}
+.c-tx{font-size:13px;color:var(--tx2);line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.c-tx em{color:var(--main);font-style:normal;background:#fff3c4;border-radius:2px;padding:0 1px}
+.c-f{margin-top:9px;display:flex;gap:8px;align-items:center}
+.c-f a{font-size:12px;color:var(--main);text-decoration:none;border:1px solid #cfe2ff;background:#f5f9ff;padding:3px 10px;border-radius:5px}
+.c-f a:hover{background:var(--main-bg)}
+.c-ctx{font-size:12px;color:var(--tx3);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:none}
+.c-ctx.on{display:block}
+
+.mask{position:absolute;inset:0;background:rgba(0,0,0,.35);display:none;z-index:50}
+.mask.on{display:block}
+.modal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:10px;width:520px;max-height:82vh;overflow-y:auto;z-index:51;display:none;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal.on{display:block}
+.m-h{padding:15px 18px;border-bottom:1px solid var(--line2);font-size:14px;font-weight:600;display:flex;align-items:center}
+.m-h button{margin-left:auto;border:none;background:none;font-size:18px;color:var(--tx3);padding:0 4px}
+.m-b{padding:16px 18px}
+.m-f{padding:12px 18px;border-top:1px solid var(--line2);display:flex;gap:8px;justify-content:flex-end}
+.row{margin-bottom:13px}
+.row label{display:block;font-size:12px;color:var(--tx2);margin-bottom:5px}
+.row .tip{font-size:11px;color:var(--tx3);margin-top:4px;line-height:1.5}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:26px;text-align:center;color:var(--tx3);font-size:13px;background:#fafbfc;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--main);background:var(--main-bg);color:var(--main)}
+.files{margin-top:10px;font-size:12px;color:var(--tx2);max-height:130px;overflow-y:auto}
+.files div{padding:4px 0;border-bottom:1px solid var(--line2)}
+.log{font-size:12px;color:var(--tx2);background:#fafbfc;border:1px solid var(--line2);border-radius:6px;padding:9px 11px;max-height:150px;overflow-y:auto;white-space:pre-wrap;line-height:1.7}
+.log .ok{color:var(--ok)} .log .er{color:var(--err)} .log .wn{color:var(--warn)}
+.chk{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.chk label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--tx2);cursor:pointer}
+.chk input{width:auto}
+</style>
+</head>
+<body data-page-node-id="9jljvZvX2QEgjmX4DsvOHJ">
+
+<header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
+  <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
+  <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
+  <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
+  <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
+  <button onclick="openUpload()" data-page-node-id="bZRvU7rGNywxxjLP6xBNJr">上传知识</button>
+  <button onclick="openSet()" data-page-node-id="W0srroshcWDIXEIUA8knLF">设置</button>
+</header>
+
+<div class="wrap" data-page-node-id="e44gHWOmu3dJYpbcI0yN6T">
+  <aside data-page-node-id="Bk8ElCjXjqBJEcjnNgb2Qz">
+    <div class="side-h" data-page-node-id="FGPC4eSTWKFEaCHPRDDQZC">
+      <span data-page-node-id="LfoxkDAl9GjOnP4u9v0YFn">检索范围</span>
+      <button style="padding:2px 8px;font-size:11px" onclick="autoCat()" id="catBtn" data-page-node-id="EPOM7rtxcr688IBMxHGMEU">AI 归类</button>
+    </div>
+    <div class="side-b" id="tree" data-page-node-id="TjtS0G1NZRTsruLJUHrkvW"></div>
+    <div class="side-f" data-page-node-id="SskMDoPlknhTTaCKqVs3kp">
+      <button style="width:100%" onclick="loadLibs()" data-page-node-id="t81tGq6mBlui0dmH82cEpn">刷新知识库</button>
+    </div>
+  </aside>
+
+  <main data-page-node-id="lk68A47b8jSLFFJ2qNjPqP">
+    <div class="searchbar" data-page-node-id="8lbqgVPRkj1JUBhM0CGper">
+      <input id="q" placeholder="输入问题或关键词，回车检索" onkeydown="if(event.key==='Enter')doSearch()" data-page-node-id="gfl38WlijGBwKeqZUxMfUi">
+      <select id="recall" data-page-node-id="wIz500F7I8XDAC6e7t1pjE">
+        <option value="keyword" data-page-node-id="6VB0IwBLlfw3qr4Tikx6oW">关键词检索</option>
+        <option value="mixed" data-page-node-id="UkVfxRawGAV0G7HYLEWQCE">混合检索</option>
+        <option value="embedding" data-page-node-id="xtbVhXsnEWYHfEz0Ewi2Mx">语义检索</option>
+      </select>
+      <select id="topk" data-page-node-id="OWHVOG4YR009DW5o1xPnIf">
+        <option value="5" data-page-node-id="B6P1lDLeF6AW8cwCeWFhB2">5 条</option>
+        <option value="10" selected data-page-node-id="iwEGVG9SThChywlAzSA3Hk">10 条</option>
+        <option value="20" data-page-node-id="MwzsbIAMIbfUECD0s204KY">20 条</option>
+      </select>
+      <button class="pri" onclick="doSearch()" id="btn" data-page-node-id="KfVtuOmw2TIFyv8geIjGMr">检索</button>
+    </div>
+    <div class="scope" id="scope" style="padding:8px 20px;background:#fff;border-bottom:1px solid var(--line)" data-page-node-id="qo2U5KJImzhZJd2QCg2iL8"></div>
+    <div class="list" id="list" data-page-node-id="GPh9etoWWErOyI49DWYnD6">
+      <div class="empty" data-page-node-id="0qqVw3OJNvxSe4Ls38MDhj">在右侧选择知识库，然后输入关键词开始检索</div>
+    </div>
+  </main>
+</div>
+
+<div class="mask" id="mask" onclick="closeAll()" data-page-node-id="NL8Ezboe4osz4n1dATpCi0"></div>
+
+<div class="modal" id="mSet" data-page-node-id="h5vZ42ZvJXGMoIlSYuG4x4">
+  <div class="m-h" data-page-node-id="YBoDzCdIExQMSjhmyvp8YO">设置<button onclick="closeAll()" data-page-node-id="EWGZAh4QN7Jq8js1zqcWEr">&times;</button></div>
+  <div class="m-b" data-page-node-id="fuRl0HlpCCWdTpnHKeyi5D">
+    <div class="row" data-page-node-id="bUKspEcaYQChOtCaUszOP8">
+      <label data-page-node-id="Ur0qdvz6xt6a9hxlsunv04">智谱 API Key</label>
+      <input type="password" id="sKey" placeholder="粘贴 bigmodel.cn 的 API Key" data-page-node-id="0lrZT3RNbUSdQKPNlqm22r">
+      <div class="tip" data-page-node-id="nYq8NLYGToYO2fOSzaN0Qa">只保存在本机浏览器，不会上传到任何地方，也不会写进网页代码。</div>
+    </div>
+    <div class="row" data-page-node-id="iFjHz6sBjI89fTF7cJMwJp">
+      <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">AI 归类模型</label>
+      <input id="sModel" value="glm-4.6" data-page-node-id="Eb7GbnbnyWhp8W3gr6iT6W">
+      <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">用于自动生成左侧分类。若提示模型不存在，改成 glm-4-flash 试试。</div>
+    </div>
+    <div class="row" data-page-node-id="i2owBChCnvOeAOPQfh8wPq">
+      <label data-page-node-id="iX5FJVPP8B5yMGF59Xh9vF">默认切片方式</label>
+      <select id="sType" data-page-node-id="wq2w62IY7RwH55dbUcLHml">
+        <option value="1" data-page-node-id="5e5JpTw99RZXCw5gu1NsEJ">按标题段落切（推荐，支持 md/doc/pdf/docx/pptx/txt）</option>
+        <option value="2" data-page-node-id="SX4INXlkCu2QcmSySiMEFQ">按问答对切（适合 FAQ 话术）</option>
+        <option value="3" data-page-node-id="U06tXBHCgxgwaU3FTDPcma">按行切（适合 xls/csv 表格）</option>
+        <option value="6" data-page-node-id="lT7WpGCyAjHGlIZ1jz44AG">按页切（适合 pdf/ppt）</option>
+      </select>
+    </div>
+    <div class="row" data-page-node-id="l1WabaqGLgb9v2ue3M96Jj">
+      <div class="chk" data-page-node-id="wqvBjZwUrYskpp3csJ0g4I">
+        <label data-page-node-id="JUTtqPhEYSO7w4kTH0LJwu"><input type="checkbox" id="sImg" data-page-node-id="LG5qOpImwilU6LTkh0xW2f"> 上传时解析图片</label>
+        <label data-page-node-id="Sr4TVi7LVzaESb1sVh6YUy"><input type="checkbox" id="sAuto" checked data-page-node-id="s8DkSgcKoRqh1aiFx8aHwJ"> 打开页面自动加载知识库</label>
+      </div>
+    </div>
+  </div>
+  <div class="m-f" data-page-node-id="UzWrO4BmdSNfbP3rvzHwxU">
+    <button onclick="testKey()" data-page-node-id="creCd6EEAW5891yztZRmFT">测试连接</button>
+    <button onclick="clearCat()" data-page-node-id="SxQ8FD6LRdjsnhuBnaWVaD">清除分类</button>
+    <button class="pri" onclick="saveSet()" data-page-node-id="i8qDk1dZvXHZKM5gjg5n2c">保存</button>
+  </div>
+</div>
+
+<div class="modal" id="mUp" data-page-node-id="ddqfFLpFD90HjQugHllwEi">
+  <div class="m-h" data-page-node-id="id2SuFOgdZqg3ih1sI4ApV">上传知识<button onclick="closeAll()" data-page-node-id="k6UezYzXscNxJVOthFEPsL">&times;</button></div>
+  <div class="m-b" data-page-node-id="eWrTLa0wjTJ6oN6Gz7aFdC">
+    <div class="row" data-page-node-id="0FK1LlV65OvCUH6fu9nHCq">
+      <label data-page-node-id="GlNCpziAF60oDNRACQpbbK">目标知识库</label>
+      <select id="uKb" data-page-node-id="heW5fMNA7HdgLXTdlZF3QP"></select>
+    </div>
+    <div class="row" data-page-node-id="OrzwseEsQYlYR6oPzBjKIh">
+      <label data-page-node-id="StQOna4NYQ8Xaw8mC5nyOB">上传文件</label>
+      <div class="drop" id="drop" onclick="document.getElementById('uFile').click()" data-page-node-id="phvGBRfWXtWqRZ9E5GYxw2">
+        点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / pptx / xlsx / csv
+      </div>
+      <input type="file" id="uFile" multiple style="display:none" onchange="pickFiles(this.files)" data-page-node-id="0UhySwW18NqWBHz0JcrDFy">
+      <div class="files" id="uFiles" data-page-node-id="2KgDu1yFs7ygiBE1gvqK8Z"></div>
+    </div>
+    <div class="row" data-page-node-id="mnZeLmCaZlTyXXEWPT8KmQ">
+      <label data-page-node-id="3M5YZNnoWhxud1buO5iJI0">或粘贴网页链接（每行一个）</label>
+      <textarea id="uUrl" rows="3" placeholder="https://..."></textarea>
+      <div class="tip" data-page-node-id="CezlgtgSj4P1uSBoJl3Fwr">用链接收录的文档，检索结果能直接跳回原网页。</div>
+    </div>
+    <div id="uLog" data-page-node-id="KfdEz9Dxlm0DfNetIVJgLO"></div>
+  </div>
+  <div class="m-f" data-page-node-id="FtLYafKAxMutEKNFjm7ECO">
+    <button onclick="closeAll()" data-page-node-id="6cPEW7gS8wiJMAj1hYmiz8">关闭</button>
+    <button class="pri" onclick="doUpload()" id="uBtn" data-page-node-id="UX9VtOBbGDGtd6agtZnrSr">开始上传</button>
+  </div>
+</div>
+
+<script>
+const BASE='https://open.bigmodel.cn/api/llm-application/open';
+const CHAT='https://open.bigmodel.cn/api/paas/v4/chat/completions';
+const LS='kb_cfg_v1';
+// 只接入这些知识库（按 id）。留空 [] 表示显示全部。
+// 新建知识库后把它的 id 加进来即可，id 可在智谱后台或浏览器控制台查看。
+const KB_WHITELIST=['2096805006861918208'];
+
+let S={key:'',libs:[],cats:null,sel:'ALL',recall:'keyword',topk:10,model:'glm-4.6',ktype:'1',pimg:false,auto:true};
+let PENDING=[];
+const $=id=>document.getElementById(id);
+
+function loadCfg(){
+  try{const c=JSON.parse(localStorage.getItem(LS)||'{}');S=Object.assign(S,c);}catch(e){}
+  $('sKey').value=S.key||'';$('sModel').value=S.model;$('sType').value=S.ktype;
+  $('sImg').checked=!!S.pimg;$('sAuto').checked=S.auto!==false;
+  $('recall').value=S.recall;$('topk').value=String(S.topk);
+}
+function saveCfg(){localStorage.setItem(LS,JSON.stringify(S));}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+async function api(path,opt={}){
+  if(!S.key)throw new Error('请先在设置里填写智谱 API Key');
+  const h={'Authorization':'Bearer '+S.key};
+  if(opt.json)h['Content-Type']='application/json';
+  const r=await fetch(BASE+path,{method:opt.method||'GET',headers:h,body:opt.body});
+  let d;try{d=await r.json();}catch(e){throw new Error('返回解析失败 HTTP '+r.status);}
+  if(d.code!==200&&d.code!==0){throw new Error(d.message||('接口错误 '+d.code));}
+  return d;
+}
+
+function setStatus(ok,txt){$('dot').className='dot'+(ok?' on':'');$('hint').textContent=txt;}
+
+async function loadLibs(silent){
+  try{
+    let all=[],page=1,total=0;
+    do{
+      const d=await api('/knowledge?page='+page+'&size=50');
+      const dd=d.data||{};total=dd.total||0;all=all.concat(dd.list||[]);page++;
+    }while(all.length<total&&page<20);
+    let libs=all.map(k=>({id:String(k.id),name:k.name||'未命名',size:k.document_size||0}));
+    if(KB_WHITELIST.length)libs=libs.filter(k=>KB_WHITELIST.includes(k.id));
+    S.libs=libs;
+    saveCfg();renderTree();
+    $('catBtn').style.display=S.libs.length>1?'':'none';
+    setStatus(true,'已连接 · '+S.libs.length+' 个知识库');
+    if(!S.cats)renderTree();
+    updScope();
+  }catch(e){
+    setStatus(false,'连接失败');
+    if(!silent)alert('加载知识库失败：'+e.message);
+  }
+}
+
+function kbName(id){const k=S.libs.find(x=>x.id===String(id));return k?k.name:id;}
+
+function renderTree(){
+  const t=$('tree');let h='';
+  const allSel=S.sel==='ALL';
+  h+='<div class="grp-t'+(allSel?' sel':'')+'" onclick="setSel(\'ALL\')"><span class="grp-n">全部知识库</span><span class="badge">'+S.libs.length+'</span></div>';
+  if(S.cats&&Object.keys(S.cats).length){
+    for(const c of Object.keys(S.cats)){
+      const ids=(S.cats[c]||[]).map(String);
+      h+='<div class="grp-t'+(S.sel==='C:'+c?' sel':'')+'" onclick="setSel(\'C:'+esc(c)+'\')"><span class="grp-n">'+esc(c)+'</span><span class="badge">'+ids.length+'</span></div>';
+      if(S.sel==='C:'+c)for(const id of ids){
+        const k=S.libs.find(x=>x.id===id)||{name:id,size:0};
+        h+='<div class="lib" onclick="setSel(\'K:'+id+'\')"><span>'+esc(k.name)+'</span><span class="badge">'+(k.size||0)+'</span></div>';
+      }
+    }
+  }else{
+    for(const k of S.libs){
+      h+='<div class="lib'+(S.sel==='K:'+k.id?' sel':'')+'" onclick="setSel(\'K:'+k.id+'\')"><span>'+esc(k.name)+'</span><span class="badge">'+(k.size||0)+'</span></div>';
+    }
+  }
+  t.innerHTML=h;
+}
+
+function setSel(v){S.sel=(S.sel===v&&v!=='ALL')?'ALL':v;saveCfg();renderTree();updScope();}
+
+function scopeIds(){
+  if(S.sel==='ALL')return S.libs.map(k=>k.id);
+  if(S.sel.startsWith('C:'))return (S.cats[S.sel.slice(2)]||[]).map(String);
+  if(S.sel.startsWith('K:'))return [S.sel.slice(2)];
+  return S.libs.map(k=>k.id);
+}
+function updScope(){
+  const ids=scopeIds();
+  $('scope').textContent='当前范围：'+(S.sel==='ALL'?'全部知识库':S.sel.startsWith('C:')?'分类「'+S.sel.slice(2)+'」':kbName(S.sel.slice(2)))+' · 共 '+ids.length+' 个库 · 检索模式：'+$('recall').selectedOptions[0].text;
+}
+
+async function doSearch(){
+  const q=$('q').value.trim();if(!q)return;
+  S.recall=$('recall').value;S.topk=+ $('topk').value;saveCfg();
+  const ids=scopeIds();
+  if(!ids.length){alert('没有选中任何知识库');return;}
+  const b=$('btn');b.disabled=true;b.textContent='检索中';
+  $('list').innerHTML='<div class="empty">正在检索…</div>';
+  try{
+    const d=await api('/knowledge/retrieve',{method:'POST',json:1,body:JSON.stringify({
+      query:q,knowledge_ids:ids,top_k:S.topk,top_n:Math.min(100,Math.max(S.topk*3,20)),recall_method:S.recall
+    })});
+    renderResults(d.data||[],q);
+  }catch(e){
+    $('list').innerHTML='<div class="empty" style="color:var(--err)">检索失败：'+esc(e.message)+'</div>';
+  }finally{b.disabled=false;b.textContent='检索';}
+}
+
+function hl(text,q){
+  let t=esc(text);
+  const ws=q.split(/[\s,，。、]+/).filter(w=>w.length>0).slice(0,12);
+  for(const w of ws){
+    try{t=t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>'<em>'+m+'</em>');}catch(e){}
+  }
+  return t;
+}
+
+function renderResults(data,q){
+  if(!data.length){$('list').innerHTML='<div class="empty">没有找到相关内容，换个关键词或试试「混合检索」</div>';return;}
+  let h='';
+  data.forEach((it,i)=>{
+    const m=it.metadata||{};
+    const url=m.doc_url||'';
+    h+='<div class="card">'
+      +'<div class="c-h"><span class="c-idx">'+(i+1)+'</span>'
+      +'<span class="c-doc">'+esc(m.doc_name||'未命名文档')+'</span>'
+      +'<span class="c-kb">'+esc(kbName(m.knowledge_id))+'</span>'
+      +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
+      +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
+      +'<div class="c-f">'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">打开原文</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
+      +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
+      +'</div>'
+      +(m.contextual_text?'<div class="c-ctx">'+esc(m.contextual_text)+'</div>':'')
+      +'</div>';
+  });
+  $('list').innerHTML=h;
+}
+
+async function autoCat(){
+  if(!S.libs.length){alert('请先加载知识库');return;}
+  if(!S.key){alert('请先填写 API Key');openSet();return;}
+  const b=$('catBtn');b.disabled=true;b.textContent='归类中';
+  try{
+    const list=S.libs.map(k=>k.id+' :: '+k.name).join('\n');
+    const body={model:S.model,temperature:0.2,messages:[
+      {role:'system',content:'你是企业知识库的分类助手。给定一批知识库的 id 和名称，请按业务品类把它们分组。只输出 JSON，格式 {"类目名":["id1","id2"]}。类目名用简短中文，不超过 6 个字，数量控制在 2-8 个。每个 id 必须且只能出现一次。不要输出任何解释文字。'},
+      {role:'user',content:list}
+    ]};
+    const r=await fetch(CHAT,{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message||'模型调用失败');
+    let txt=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+    txt=txt.replace(/```json/g,'').replace(/```/g,'').trim();
+    const s=txt.indexOf('{'),e=txt.lastIndexOf('}');
+    if(s<0)throw new Error('模型没有返回 JSON');
+    const obj=JSON.parse(txt.slice(s,e+1));
+    const seen={},cats={};
+    for(const c of Object.keys(obj)){
+      const ids=(obj[c]||[]).map(String).filter(id=>!seen[id]&&S.libs.some(k=>k.id===id));
+      ids.forEach(id=>seen[id]=1);
+      if(ids.length)cats[c]=ids;
+    }
+    const rest=S.libs.map(k=>k.id).filter(id=>!seen[id]);
+    if(rest.length)cats['未归类']=rest;
+    S.cats=cats;saveCfg();renderTree();updScope();
+  }catch(err){
+    alert('AI 归类失败：'+err.message+'\n\n如果是模型名问题，去设置里改成 glm-4-flash。');
+  }finally{b.disabled=false;b.textContent='AI 归类';}
+}
+function clearCat(){S.cats=null;saveCfg();renderTree();updScope();}
+
+function openSet(){closeAll();$('mask').classList.add('on');$('mSet').classList.add('on');}
+function openUpload(){
+  if(!S.libs.length){alert('请先加载知识库');return;}
+  closeAll();
+  $('uKb').innerHTML=S.libs.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join('');
+  $('mask').classList.add('on');$('mUp').classList.add('on');
+}
+function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');}
+
+function pickFiles(fs){PENDING=PENDING.concat(Array.from(fs));renderFiles();}
+function renderFiles(){
+  $('uFiles').innerHTML=PENDING.length?PENDING.map(f=>'<div>'+esc(f.name)+' · '+(f.size/1024).toFixed(0)+' KB</div>').join(''):'';
+}
+const drop=$('drop');
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');pickFiles(e.dataTransfer.files);});
+
+function plog(msg,cls){
+  const d=document.createElement('div');
+  if(cls)d.className=cls;
+  d.textContent=msg;
+  $('uLog').appendChild(d);
+  $('uLog').scrollTop=$('uLog').scrollHeight;
+}
+
+async function doUpload(){
+  const kb=$('uKb').value;
+  const urls=$('uUrl').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+  if(!PENDING.length&&!urls.length){alert('请先选择文件或填写链接');return;}
+  const b=$('uBtn');b.disabled=true;
+  $('uLog').innerHTML='<div class="log" id="lg"></div>';
+  const lg=()=>$('lg');
+  const L=(m,c)=>{const d=document.createElement('div');if(c)d.className=c;d.textContent=m;lg().appendChild(d);lg().scrollTop=lg().scrollHeight;};
+
+  for(const f of PENDING){
+    L('上传文件：'+f.name);
+    try{
+      const fd=new FormData();
+      fd.append('files',f);
+      fd.append('knowledge_type',S.ktype);
+      fd.append('sentence_size','300');
+      fd.append('parse_image',S.pimg?'true':'false');
+      const r=await fetch(BASE+'/document/upload_document/'+kb,{
+        method:'POST',headers:{'Authorization':'Bearer '+S.key},body:fd
+      });
+      const d=await r.json();
+      if(d.code!==200&&d.code!==0)throw new Error(d.message||('HTTP '+r.status));
+      const ok=(d.data&&d.data.successInfos)||[];
+      const bad=(d.data&&d.data.failedInfos)||[];
+      ok.forEach(o=>L('  成功：'+o.fileName,'ok'));
+      bad.forEach(o=>L('  失败：'+o.fileName+' — '+o.failReason,'er'));
+    }catch(e){L('  出错：'+e.message,'er');}
+  }
+
+  if(urls.length){
+    L('上传链接 '+urls.length+' 条');
+    try{
+      const d=await api('/document/upload_url',{method:'POST',json:1,body:JSON.stringify({
+        knowledge_id:kb,upload_detail:urls.map(u=>({url:u}))
+      })});
+      ((d.data&&d.data.successInfos)||[]).forEach(o=>L('  成功：'+o.url,'ok'));
+      ((d.data&&d.data.failedInfos)||[]).forEach(o=>L('  失败：'+o.url+' — '+o.failReason,'er'));
+    }catch(e){L('  出错：'+e.message,'er');}
+  }
+
+  L('全部提交完成。智谱需要一点时间做切片和向量化，稍后检索即可看到新内容。','wn');
+  PENDING=[];renderFiles();$('uUrl').value='';
+  b.disabled=false;
+  setTimeout(()=>loadLibs(true),3000);
+}
+
+async function testKey(){
+  if(!$('sKey').value.trim()){alert('请先填 Key');return;}
+  S.key=$('sKey').value.trim();
+  try{
+    const r=await fetch(BASE+'/knowledge?page=1&size=1',{headers:{'Authorization':'Bearer '+S.key}});
+    const d=await r.json();
+    if(d.code===200||d.code===0)alert('连接成功，共 '+(d.data&&d.data.total)+' 个知识库');
+    else alert('失败：'+(d.message||d.code));
+  }catch(e){alert('连接失败：'+e.message);}
+}
+
+function saveSet(){
+  S.key=$('sKey').value.trim();
+  S.model=$('sModel').value.trim()||'glm-4.6';
+  S.ktype=$('sType').value;
+  S.pimg=$('sImg').checked;
+  S.auto=$('sAuto').checked;
+  saveCfg();closeAll();
+  if(S.key)loadLibs();
+}
+
+$('recall').onchange=()=>{S.recall=$('recall').value;saveCfg();updScope();};
+$('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
+
+loadCfg();
+if(S.key&&S.auto!==false)loadLibs(true);
+else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
+</script>
+</body>
+</html>
