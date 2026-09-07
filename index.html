@@ -95,7 +95,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907c</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907f</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -302,7 +302,9 @@ async function viewFull(el){
   try{
     if(/\.pdf$/i.test(t)){
       await loadPdfJs();
-      const doc=await pdfjsLib.getDocument({url:u}).promise;
+      // 复用预览时已下载的文档，秒开；没有缓存才重新下载
+      let doc=_docCache[u];
+      if(!doc){doc=await pdfjsLib.getDocument({url:u}).promise;_docCache[u]=doc;}
       body.innerHTML='';
       for(let p=1;p<=doc.numPages;p++){
         const page=await doc.getPage(p);
