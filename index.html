@@ -490,30 +490,34 @@ function renderResults(data,q){
 }
 
 // ============ 原文内嵌预览：pdf.js 渲染 PDF / mammoth 转_docx / 直接读文本 ============
+// 多 CDN 依次回退（cdnjs 国内经常连不上，用 bootcdn 兜底）
+function loadScriptAny(urls){
+  return urls.reduce((p,u)=>p.catch(()=>new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src=u;s.onload=res;s.onerror=()=>rej(new Error('加载失败: '+u));
+    document.head.appendChild(s);
+  })),Promise.reject());
+}
 let _pdfjsP=null;
 function loadPdfJs(){
   if(window.pdfjsLib)return Promise.resolve();
   if(_pdfjsP)return _pdfjsP;
-  _pdfjsP=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res();};
-    s.onerror=()=>rej(new Error('pdf.js 加载失败'));
-    document.head.appendChild(s);
-  });
+  _pdfjsP=loadScriptAny([
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    'https://cdn.bootcdn.net/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    'https://cdn.staticfile.net/pdf.js/3.11.174/pdf.min.js'
+  ]).then(()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.bootcdn.net/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';});
   return _pdfjsP;
 }
 let _mammothP=null;
 function loadMammoth(){
   if(window.mammoth)return Promise.resolve();
   if(_mammothP)return _mammothP;
-  _mammothP=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
-    s.onload=()=>window.mammoth?res():rej(new Error('mammoth 加载失败'));
-    s.onerror=()=>rej(new Error('mammoth 加载失败'));
-    document.head.appendChild(s);
-  });
+  _mammothP=loadScriptAny([
+    'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
+    'https://cdn.bootcdn.net/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
+    'https://cdn.staticfile.net/mammoth.js/1.6.0/mammoth.browser.min.js'
+  ]);
   return _mammothP;
 }
 const _docCache={};
@@ -521,12 +525,19 @@ function fetchDoc(url){
   if(!_docCache[url])_docCache[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();});
   return _docCache[url];
 }
-const _prevBoxH=460;
+const _prevBoxH=300;
+function prevFooter(url,name){
+  const f=document.createElement('div');
+  f.style.cssText='position:absolute;bottom:0;left:0;right:0;padding:7px 10px;border-top:1px solid var(--line2);text-align:center;background:rgba(250,251,252,.96)';
+  f.innerHTML='<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+url.replace(/"/g,'&quot;')+'" data-t="'+(name||'').replace(/"/g,'&quot;')+'" style="font-weight:600">展开完整原文 📄</a>';
+  return f;
+}
 async function renderPreview(box){
   const url=box.getAttribute('data-u'),name=box.getAttribute('data-n')||'';
   const hit0=parseInt(box.getAttribute('data-p')||'0',10);
   try{
-    box.style.cssText='margin:8px 0;border:1px solid var(--line);border-radius:6px;max-height:'+_prevBoxH+'px;overflow-y:auto;background:#fff';
+    // 固定一屏高度，超出截断不滚动；底部「展开完整原文」看全部
+    box.style.cssText='margin:8px 0;border:1px solid var(--line);border-radius:6px;height:'+_prevBoxH+'px;overflow:hidden;position:relative;background:#fff';
     if(/\.pdf$/i.test(name)){
       await loadPdfJs();
       let doc=_docCache[url];
@@ -546,9 +557,10 @@ async function renderPreview(box){
         wrap.appendChild(cv);
       }
       const tip=document.createElement('div');
-      tip.className='tip';tip.style.padding='6px 8px';
+      tip.className='tip';tip.style.padding='4px 8px';
       tip.textContent='原文预览：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页';
       box.appendChild(tip);box.insertBefore(wrap,box.firstChild);
+      box.appendChild(prevFooter(url,name));
       box.scrollTop=0;
     }else if(/\.docx$/i.test(name)){
       await loadMammoth();
@@ -559,9 +571,10 @@ async function renderPreview(box){
       wrap.innerHTML=d.value||'<span class="tip">此文档没有可显示的文本内容</span>';
       box.innerHTML='';box.appendChild(wrap);
       const tip=document.createElement('div');
-      tip.className='tip';tip.style.padding='6px 8px';
+      tip.className='tip';tip.style.padding='4px 8px';
       tip.textContent='docx 原文预览（转换显示，表格/图片样式可能简化）';
       box.appendChild(tip);
+      box.appendChild(prevFooter(url,name));
     }else if(/\.(md|txt|csv)$/i.test(name)){
       const buf=await fetchDoc(url);
       const txt=new TextDecoder('utf-8').decode(buf);
@@ -569,6 +582,7 @@ async function renderPreview(box){
       wrap.style.cssText='padding:12px 16px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;font-family:inherit';
       wrap.textContent=txt.slice(0,20000)||'（空文档）';
       box.innerHTML='';box.appendChild(wrap);
+      box.appendChild(prevFooter(url,name));
     }else{
       box.innerHTML='<div class="tip" style="padding:8px">该格式（'+esc(name.split('.').pop())+'）不支持内嵌预览，请用「查看全文」或「新窗口打开」</div>';
     }
