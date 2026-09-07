@@ -374,12 +374,38 @@ async function doSearch(){
 }
 
 function hl(text,q){
-  let t=esc(text);
-  const ws=q.split(/[\s,，。、]+/).filter(w=>w.length>0).slice(0,12);
-  for(const w of ws){
-    try{t=t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>'<em>'+m+'</em>');}catch(e){}
+  const raw=String(text==null?'':text);
+  // 1. 生成候选词：把查询串按分隔符拆开，再从每段里取出所有 >=2 字的连续子串
+  const segs=q.split(/[\s,，。、？?！!]+/).filter(Boolean).slice(0,8);
+  const cands=new Set();
+  for(const seg of segs){
+    for(let i=0;i<seg.length;i++){
+      for(let len=2;len<=Math.min(8,seg.length-i);len++)cands.add(seg.slice(i,i+len));
+    }
   }
-  return t;
+  // 2. 在原文里找出所有候选词的命中位置
+  const hits=[];
+  for(const w of cands){
+    let idx=0;
+    const lw=w.toLowerCase(),lr=raw.toLowerCase();
+    while((idx=lr.indexOf(lw,idx))!==-1){hits.push([idx,idx+w.length]);idx+=1;}
+  }
+  if(!hits.length)return esc(raw);
+  // 3. 合并重叠区间，长词优先保留
+  hits.sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
+  const merged=[];
+  for(const h of hits){
+    const last=merged[merged.length-1];
+    if(last&&h[0]<last[1]){if(h[1]>last[1])last[1]=h[1];}
+    else merged.push([h[0],h[1]]);
+  }
+  // 4. 拼装 HTML
+  let out='',pos=0;
+  for(const [s,e] of merged){
+    out+=esc(raw.slice(pos,s))+'<em>'+esc(raw.slice(s,e))+'</em>';
+    pos=e;
+  }
+  return out+esc(raw.slice(pos));
 }
 
 function renderResults(data,q){
