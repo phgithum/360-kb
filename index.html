@@ -148,6 +148,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
       <div class="tip" data-page-node-id="nYq8NLYGToYO2fOSzaN0Qa">只保存在本机浏览器，不会上传到任何地方，也不会写进网页代码。</div>
     </div>
     <div class="row" data-page-node-id="iFjHz6sBjI89fTF7cJMwJp">
+      <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">本机设备码</label>
+      <div class="tip" style="font-size:12px;color:var(--tx)"><b style="user-select:all" id="devIdBox"></b> <button style="padding:2px 10px;font-size:12px" onclick="navigator.clipboard&&navigator.clipboard.writeText(DEV_ID)">复制</button></div>
+      <div class="tip">同一台电脑的同一个浏览器永远是同一个码，清浏览器缓存或用无痕模式会变新码。管理员可在后台「设备管理」中授权。</div>
+    </div>
+    <div class="row" data-page-node-id="iFjHz6sBjI89fTF7cJMwJp">
       <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">高级参数</label>
       <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">知识库范围、格式白名单、大小上限、切片方式、AI 模型等参数已移到<a href="admin.html" target="_blank" style="color:var(--main)">专用后台</a>统一管理，修改后刷新本页生效。</div>
     </div>
@@ -200,25 +205,64 @@ const DEF={
   img_max:5,
   media_ext:['mp4','mov','avi','mkv','webm','flv','wmv','m4v','mp3','wav','m4a','gif','bmp','svg','tif','tiff'],
   maxmb:20,
+  limits:{md:5,txt:5,csv:10,doc:20,docx:20,xls:20,xlsx:20,pdf:20,ppt:50,pptx:50},
   model:'glm-4.6',
   ktype:'1',
   ssize:300,
   pimg:false,
   recall:'keyword',
   topk:10,
-  auto:true
+  auto:true,
+  access_mode:'open',
+  allowed_devices:[]
 };
 let CFG=Object.assign({},DEF);
 try{Object.assign(CFG,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){}
-const KB_WHITELIST=CFG.kb_whitelist||[];
-const OK_EXT=CFG.ok_ext||DEF.ok_ext;
-const IMG_EXT=CFG.img_ext||DEF.img_ext;
-const IMG_MAX_MB=CFG.img_max||5;
-const MEDIA_EXT=CFG.media_ext||DEF.media_ext;
+let KB_WHITELIST,OK_EXT,IMG_EXT,IMG_MAX_MB,MEDIA_EXT;
+function applyCFG(){
+  KB_WHITELIST=CFG.kb_whitelist||[];
+  OK_EXT=CFG.ok_ext||DEF.ok_ext;
+  IMG_EXT=CFG.img_ext||DEF.img_ext;
+  IMG_MAX_MB=CFG.img_max||5;
+  MEDIA_EXT=CFG.media_ext||DEF.media_ext;
+}
+applyCFG();
 
 let S={key:'',libs:[],cats:null,sel:'ALL',recall:CFG.recall||'keyword',topk:CFG.topk||10};
 let PENDING=[];
 let REJECTED=[];
+
+// ============ 设备唯一码 ============
+const DEV_LS='kb_device_id';
+function getDevId(){
+  let d=null;
+  try{d=localStorage.getItem(DEV_LS);}catch(e){}
+  if(!d){
+    d=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('d-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12));
+    try{localStorage.setItem(DEV_LS,d);}catch(e){}
+  }
+  return d;
+}
+const DEV_ID=getDevId();
+
+// 每个格式单独的上限；没有单独设置的用统一 maxmb 兜底
+function limitFor(ext){
+  ext=(ext||'').toLowerCase();
+  if(IMG_EXT.includes(ext))return IMG_MAX_MB;
+  const v=CFG.limits?CFG.limits[ext]:null;
+  return (v!=null?v:(CFG.maxmb||20));
+}
+
+// 访问控制：白名单模式下，设备码不在允许名单里就拒绝使用
+function accessDenied(){
+  return CFG.access_mode==='whitelist'&&!(CFG.allowed_devices||[]).includes(DEV_ID);
+}
+function showDenied(){
+  $('list').innerHTML='<div class="empty"><div style="font-size:15px;color:var(--err);font-weight:600;margin-bottom:10px">本设备未获得使用授权</div>'
+    +'设备码：<b style="user-select:all">'+esc(DEV_ID)+'</b> '
+    +'<button style="padding:2px 10px;font-size:12px" onclick="navigator.clipboard&&navigator.clipboard.writeText(DEV_ID)">复制</button>'
+    +'<div class="tip" style="margin-top:10px">把设备码发给管理员，加入允许名单后刷新本页即可。</div></div>';
+}
 const $=id=>document.getElementById(id);
 
 function loadCfg(){
@@ -390,7 +434,6 @@ function openUpload(){
 function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');}
 
 function pickFiles(fs){
-  const max=(CFG.maxmb||20)*1024*1024;
   const imgMax=IMG_MAX_MB*1024*1024;
   REJECTED=[];
   for(const f of Array.from(fs)){
@@ -407,8 +450,9 @@ function pickFiles(fs){
       REJECTED.push(f.name+'（已拦截：'+(MEDIA_EXT.includes(ext)?'视频/音频无法收入知识库':'不支持的格式')+'）');
       continue;
     }
-    if(f.size>max){
-      REJECTED.push(f.name+'（已拦截：超过 '+CFG.maxmb+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
+    const lim=limitFor(ext);
+    if(f.size>lim*1024*1024){
+      REJECTED.push(f.name+'（已拦截：'+ext+' 超过 '+lim+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
       continue;
     }
     PENDING.push(f);
@@ -509,7 +553,10 @@ $('recall').onchange=()=>{S.recall=$('recall').value;saveCfg();updScope();};
 $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
-if(S.key&&CFG.auto!==false)loadLibs(true);
+$('devIdBox').textContent=DEV_ID;
+if(accessDenied()){
+  showDenied();
+}else if(S.key&&CFG.auto!==false)loadLibs(true);
 else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
 </script>
 </body>
