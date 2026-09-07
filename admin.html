@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知识库后台管理</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --line:#e5e7eb; --line2:#eef0f3;
+  --tx:#1f2329; --tx2:#5f6672; --tx3:#98a0ad;
+  --main:#1677ff; --main-bg:#e8f2ff; --ok:#12a150; --warn:#d98200; --err:#d93026;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--tx);padding:6px 14px;border-radius:6px}
+button:hover{border-color:#c9ced6;background:#fafbfc}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.pri{background:var(--main);border-color:var(--main);color:#fff}
+button.pri:hover{background:#0e63d6;border-color:#0e63d6}
+input,select,textarea{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--tx);background:#fff;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--main)}
+input[type=checkbox]{width:auto}
+input[type=number]{width:120px}
+header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px;gap:12px;position:sticky;top:0;z-index:10}
+.logo{font-size:15px;font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:#c9ced6}
+.dot.on{background:var(--ok)}
+.hint{font-size:12px;color:var(--tx3)}
+.spacer{flex:1}
+.wrap{max-width:860px;margin:0 auto;padding:18px 16px 60px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:14px}
+.card h3{font-size:14px;margin-bottom:4px}
+.card .sub{font-size:12px;color:var(--tx3);margin-bottom:12px}
+.row{margin-bottom:12px}
+.row:last-child{margin-bottom:0}
+.row>label{display:block;font-size:12px;color:var(--tx2);margin-bottom:5px}
+.tip{font-size:11px;color:var(--tx3);margin-top:4px;line-height:1.6}
+.inline{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.inline label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--tx2);cursor:pointer;font-weight:normal;margin:0}
+.kbs{max-height:260px;overflow-y:auto;border:1px solid var(--line2);border-radius:6px;padding:6px 10px;background:#fafbfc}
+.kbs label{display:flex;align-items:center;gap:7px;padding:5px 2px;font-size:13px;color:var(--tx);cursor:pointer;border-bottom:1px solid var(--line2)}
+.kbs label:last-child{border-bottom:none}
+.kbs .sz{margin-left:auto;font-size:11px;color:var(--tx3)}
+.foot{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px;display:flex;gap:8px;justify-content:center}
+.foot button{padding:8px 22px}
+.warnbox{background:#fff7e8;border:1px solid #ffe1ad;border-radius:6px;padding:9px 12px;font-size:12px;color:#8a5b00;line-height:1.7}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">知识库后台管理</div>
+  <div class="dot" id="dot"></div>
+  <div class="hint" id="hint">未连接</div>
+  <div class="spacer"></div>
+  <button onclick="location.href='index.html'">返回检索台</button>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h3>连接</h3>
+    <div class="sub">与检索台共用同一个 Key，保存在本机浏览器。</div>
+    <div class="row">
+      <label>智谱 API Key</label>
+      <input type="password" id="aKey" placeholder="粘贴 bigmodel.cn 的 API Key">
+    </div>
+    <button onclick="loadKBs()">加载知识库列表</button>
+  </div>
+
+  <div class="card">
+    <h3>知识库范围</h3>
+    <div class="sub">勾选的知识库才会显示在检索台。全部不勾 = 显示所有知识库。</div>
+    <div class="row">
+      <div class="inline" style="margin-bottom:8px">
+        <button style="padding:3px 10px;font-size:12px" onclick="selAll(1)">全选</button>
+        <button style="padding:3px 10px;font-size:12px" onclick="selAll(0)">清空</button>
+        <span class="tip" style="margin:0" id="kbCount"></span>
+      </div>
+      <div class="kbs" id="kbList"><div class="tip" style="padding:8px">先在上方填好 Key 并点「加载知识库列表」</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>上传限制</h3>
+    <div class="sub">控制检索台「上传知识」允许什么、拦截什么。视频和音频始终拦截。</div>
+    <div class="row">
+      <label>文档格式白名单（超过上限的文件会被拦截）</label>
+      <div class="inline" id="docExts"></div>
+    </div>
+    <div class="row">
+      <label>文档单文件大小上限（MB）</label>
+      <input type="number" id="aMax" min="1" max="100" value="20">
+      <div class="tip">智谱官方单文件上限 100MB；建议 20MB 左右以防存储膨胀产生费用。</div>
+    </div>
+    <div class="row">
+      <label>图片格式白名单</label>
+      <div class="inline" id="imgExts"></div>
+    </div>
+    <div class="row">
+      <label>图片单张大小上限（MB）</label>
+      <input type="number" id="aImgMax" min="1" max="20" value="5">
+      <div class="tip">智谱官方规定 jpeg/png/webp 单张不超过 5MB。</div>
+    </div>
+    <div class="row">
+      <label>链接上传时拦截的媒体扩展名（逗号分隔）</label>
+      <textarea id="aMedia" rows="2"></textarea>
+      <div class="tip">粘贴的网页链接若指向这些格式（如 .mp4、.gif）会被拦截。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>检索与 AI</h3>
+    <div class="sub">检索台打开时的默认值，个人在页面上仍可临时切换。</div>
+    <div class="row">
+      <label>默认检索模式</label>
+      <select id="aRecall" style="width:auto;min-width:160px">
+        <option value="keyword">关键词检索</option>
+        <option value="mixed">混合检索</option>
+        <option value="embedding">语义检索</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>默认返回条数</label>
+      <select id="aTopk" style="width:auto;min-width:120px">
+        <option value="5">5 条</option>
+        <option value="10">10 条</option>
+        <option value="20">20 条</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>AI 归类模型</label>
+      <input id="aModel" style="width:220px" value="glm-4.6">
+      <div class="tip">用于检索台左侧的「AI 归类」。若报模型不存在，改成 glm-4-flash。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>上传处理参数</h3>
+    <div class="sub">文件提交给智谱时使用的切片和解析方式。</div>
+    <div class="row">
+      <label>默认切片方式</label>
+      <select id="aKtype" style="width:auto;min-width:280px">
+        <option value="1">按标题段落切（推荐，支持 md/doc/pdf/docx/pptx/txt）</option>
+        <option value="2">按问答对切（适合 FAQ 话术）</option>
+        <option value="3">按行切（适合 xls/csv 表格）</option>
+        <option value="6">按页切（适合 pdf/ppt）</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>切片句子长度（字符）</label>
+      <input type="number" id="aSsize" min="50" max="1000" value="300">
+    </div>
+    <div class="row">
+      <div class="inline">
+        <label><input type="checkbox" id="aPimg"> 上传文档时解析图片（增加消耗，默认关）</label>
+        <label><input type="checkbox" id="aAuto"> 检索台打开时自动连接知识库</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="warnbox">
+    注意：配置保存在<b>本机浏览器的 localStorage</b>，对本机的检索台立即生效。
+    如果团队其他人也用这个网页，他们的浏览器会用「代码内置默认值」——需要全团队统一改默认值时告诉我，我把配置固化进网页代码重新发布。
+  </div>
+
+</div>
+
+<div class="foot">
+  <button onclick="resetAll()">恢复默认</button>
+  <button onclick="exportCfg()">导出配置</button>
+  <button onclick="document.getElementById('impFile').click()">导入配置</button>
+  <input type="file" id="impFile" accept=".json" style="display:none" onchange="importCfg(this.files[0])">
+  <button class="pri" onclick="saveAll()">保存配置</button>
+</div>
+
+<script>
+const BASE='https://open.bigmodel.cn/api/llm-application/open';
+const LS='kb_cfg_v1';
+const ADMIN_LS='kb_admin_v1';
+
+const DOC_LIST=['md','txt','pdf','doc','docx','ppt','pptx','xls','xlsx','csv'];
+const IMG_LIST=['jpg','jpeg','png','webp'];
+
+const DEF={
+  kb_whitelist:['2096805006861918208'],
+  ok_ext:['md','txt','pdf','doc','docx','ppt','pptx','xls','xlsx','csv'],
+  img_ext:['jpg','jpeg','png','webp'],
+  img_max:5,
+  media_ext:['mp4','mov','avi','mkv','webm','flv','wmv','m4v','mp3','wav','m4a','gif','bmp','svg','tif','tiff'],
+  maxmb:20,
+  model:'glm-4.6',
+  ktype:'1',
+  ssize:300,
+  pimg:false,
+  recall:'keyword',
+  topk:10,
+  auto:true
+};
+let CFG=Object.assign({},DEF);
+let KBLIST=[];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function getKey(){try{return (JSON.parse(localStorage.getItem(LS)||'{}').key)||'';}catch(e){return '';}}
+function saveKey(k){
+  let c={};try{c=JSON.parse(localStorage.getItem(LS)||'{}');}catch(e){}
+  c.key=k;localStorage.setItem(LS,JSON.stringify(c));
+}
+function setStatus(ok,txt){$('dot').className='dot'+(ok?' on':'');$('hint').textContent=txt;}
+
+function renderExtBoxes(){
+  $('docExts').innerHTML=DOC_LIST.map(e=>'<label><input type="checkbox" class="docext" value="'+e+'"'+(CFG.ok_ext.includes(e)?' checked':'')+'> '+e+'</label>').join('')
+    +'<input id="docExtra" placeholder="其他格式，逗号分隔" style="width:170px" value="'+esc(CFG.ok_ext.filter(e=>!DOC_LIST.includes(e)).join(','))+'">';
+  $('imgExts').innerHTML=IMG_LIST.map(e=>'<label><input type="checkbox" class="imgext" value="'+e+'"'+(CFG.img_ext.includes(e)?' checked':'')+'> '+e+'</label>').join('');
+}
+function fillForm(){
+  $('aKey').value=getKey();
+  $('aMax').value=CFG.maxmb;$('aImgMax').value=CFG.img_max;
+  $('aMedia').value=CFG.media_ext.join(', ');
+  $('aRecall').value=CFG.recall;$('aTopk').value=String(CFG.topk);
+  $('aModel').value=CFG.model;$('aKtype').value=CFG.ktype;
+  $('aSsize').value=CFG.ssize;
+  $('aPimg').checked=!!CFG.pimg;$('aAuto').checked=CFG.auto!==false;
+  renderExtBoxes();
+  renderKBChecks();
+}
+function collect(){
+  const docSel=Array.from(document.querySelectorAll('.docext:checked')).map(x=>x.value);
+  const extra=$('docExtra').value.split(/[\s,，]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const imgSel=Array.from(document.querySelectorAll('.imgext:checked')).map(x=>x.value);
+  const media=$('aMedia').value.split(/[\s,，]+/).map(s=>s.trim().toLowerCase().replace(/^\./,'')).filter(Boolean);
+  const kbSel=Array.from(document.querySelectorAll('.kbchk:checked')).map(x=>x.value);
+  return {
+    kb_whitelist:kbSel,
+    ok_ext:Array.from(new Set(docSel.concat(extra))),
+    img_ext:imgSel,
+    img_max:Math.min(20,Math.max(1,+$('aImgMax').value||5)),
+    media_ext:media,
+    maxmb:Math.min(100,Math.max(1,+$('aMax').value||20)),
+    recall:$('aRecall').value,
+    topk:+$('aTopk').value||10,
+    model:$('aModel').value.trim()||'glm-4.6',
+    ktype:$('aKtype').value,
+    ssize:Math.min(1000,Math.max(50,+$('aSsize').value||300)),
+    pimg:$('aPimg').checked,
+    auto:$('aAuto').checked
+  };
+}
+
+async function loadKBs(){
+  const k=$('aKey').value.trim();
+  if(!k){alert('请先填 Key');return;}
+  saveKey(k);
+  const b=event.target;b.disabled=true;b.textContent='加载中…';
+  try{
+    let all=[],page=1,total=0;
+    do{
+      const r=await fetch(BASE+'/knowledge?page='+page+'&size=50',{headers:{'Authorization':'Bearer '+k}});
+      const d=await r.json();
+      if(d.code!==200&&d.code!==0)throw new Error(d.message||('HTTP '+r.status));
+      const dd=d.data||{};total=dd.total||0;all=all.concat(dd.list||[]);page++;
+    }while(all.length<total&&page<20);
+    KBLIST=all.map(x=>({id:String(x.id),name:x.name||'未命名',size:x.document_size||0}));
+    setStatus(true,'已连接 · '+KBLIST.length+' 个知识库');
+    renderKBChecks();
+  }catch(e){
+    setStatus(false,'连接失败');
+    alert('加载失败：'+e.message);
+  }finally{b.disabled=false;b.textContent='加载知识库列表';}
+}
+
+function renderKBChecks(){
+  if(!KBLIST.length){$('kbList').innerHTML='<div class="tip" style="padding:8px">尚未加载知识库列表</div>';$('kbCount').textContent='';return;}
+  $('kbList').innerHTML=KBLIST.map(k=>
+    '<label><input type="checkbox" class="kbchk" value="'+k.id+'"'+(CFG.kb_whitelist.includes(k.id)?' checked':'')+'>'
+    +esc(k.name)+'<span class="sz">'+(k.size||0)+' 个文档</span></label>').join('');
+  updKbCount();
+}
+function updKbCount(){
+  const n=document.querySelectorAll('.kbchk:checked').length;
+  $('kbCount').textContent=n?('已选 '+n+' / '+KBLIST.length+' 个（全部不勾 = 显示全部）'):'全部不勾 = 显示全部知识库';
+}
+document.addEventListener('change',e=>{if(e.target.classList&&e.target.classList.contains('kbchk'))updKbCount();});
+function selAll(v){
+  document.querySelectorAll('.kbchk').forEach(x=>x.checked=!!v);
+  updKbCount();
+}
+
+function saveAll(){
+  CFG=collect();
+  const k=$('aKey').value.trim();
+  if(k)saveKey(k);
+  localStorage.setItem(ADMIN_LS,JSON.stringify(CFG));
+  alert('已保存。回到检索台刷新页面即可生效。');
+}
+function resetAll(){
+  if(!confirm('恢复全部默认值？（不会立即保存，点「保存配置」才生效）'))return;
+  CFG=Object.assign({},DEF);fillForm();
+}
+function exportCfg(){
+  const data=JSON.stringify(collect(),null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download='kb-config.json';a.click();
+}
+function importCfg(f){
+  if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      CFG=Object.assign({},DEF,JSON.parse(r.result));
+      fillForm();
+      alert('已导入。检查无误后点「保存配置」。');
+    }catch(e){alert('文件解析失败：'+e.message);}
+  };
+  r.readAsText(f,'utf-8');
+}
+
+CFG=(function(){try{return Object.assign({},DEF,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){return Object.assign({},DEF);}})();
+fillForm();
+if(getKey()){$('aKey').value=getKey();setStatus(false,'已读取本机 Key，点「加载知识库列表」开始');}
+</script>
+</body>
+</html>
