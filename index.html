@@ -478,7 +478,7 @@ function renderResults(data,q){
       +(it.n>1?'<span class="c-kb" style="color:var(--main)">命中 '+it.n+' 处</span>':'')
       +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
-      +(url&&isPdf?'<div class="c-thumb" data-u="'+esc(url)+'" data-p="'+(m.page_index!=null?m.page_index:0)+'"><div class="tip" style="padding:6px 2px">正在生成命中页缩略图…</div></div>':'')
+      +(url?'<div class="c-prev" data-u="'+esc(url)+'" data-n="'+esc(m.doc_name||'')+'" data-p="'+(m.page_index!=null?m.page_index:0)+'"><div class="tip" style="padding:6px 2px">正在加载原文预览…</div></div>':'')
       +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
       +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
       +'</div>'
@@ -486,10 +486,10 @@ function renderResults(data,q){
       +'</div>';
   });
   $('list').innerHTML=h;
-  document.querySelectorAll('.c-thumb').forEach(renderThumb);
+  document.querySelectorAll('.c-prev').forEach(renderPreview);
 }
 
-// ============ PDF 命中页缩略图（pdf.js 渲染） ============
+// ============ 原文内嵌预览：pdf.js 渲染 PDF / mammoth 转_docx / 直接读文本 ============
 let _pdfjsP=null;
 function loadPdfJs(){
   if(window.pdfjsLib)return Promise.resolve();
@@ -503,26 +503,77 @@ function loadPdfJs(){
   });
   return _pdfjsP;
 }
-const _thumbCache={};
-async function renderThumb(box){
-  const url=box.getAttribute('data-u');
-  const pageNo=parseInt(box.getAttribute('data-p')||'1',10)+1; // page_index 从 0 计
+let _mammothP=null;
+function loadMammoth(){
+  if(window.mammoth)return Promise.resolve();
+  if(_mammothP)return _mammothP;
+  _mammothP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+    s.onload=()=>window.mammoth?res():rej(new Error('mammoth 加载失败'));
+    s.onerror=()=>rej(new Error('mammoth 加载失败'));
+    document.head.appendChild(s);
+  });
+  return _mammothP;
+}
+const _docCache={};
+function fetchDoc(url){
+  if(!_docCache[url])_docCache[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();});
+  return _docCache[url];
+}
+const _prevBoxH=460;
+async function renderPreview(box){
+  const url=box.getAttribute('data-u'),name=box.getAttribute('data-n')||'';
+  const hit0=parseInt(box.getAttribute('data-p')||'0',10);
   try{
-    await loadPdfJs();
-    let doc=_thumbCache[url];
-    if(!doc){doc=await pdfjsLib.getDocument({url}).promise;_thumbCache[url]=doc;}
-    const page=await doc.getPage(Math.min(Math.max(1,pageNo),doc.numPages));
-    const vp0=page.getViewport({scale:1});
-    const scale=Math.min(560/vp0.width,420/vp0.height,2);
-    const vp=page.getViewport({scale});
-    const cv=document.createElement('canvas');
-    cv.width=vp.width;cv.height=vp.height;
-    await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-    cv.style.cssText='max-width:100%;border:1px solid var(--line);border-radius:6px;display:block';
-    box.innerHTML='<div class="tip" style="padding:2px 2px 6px">命中页预览（第 '+pageNo+' 页 / 共 '+doc.numPages+' 页）</div>';
-    box.appendChild(cv);
+    box.style.cssText='margin:8px 0;border:1px solid var(--line);border-radius:6px;max-height:'+_prevBoxH+'px;overflow-y:auto;background:#fff';
+    if(/\.pdf$/i.test(name)){
+      await loadPdfJs();
+      let doc=_docCache[url];
+      if(!doc){doc=await pdfjsLib.getDocument({url}).promise;_docCache[url]=doc;}
+      const wrap=document.createElement('div');
+      box.innerHTML='';
+      const start=Math.min(Math.max(1,hit0+1),doc.numPages);
+      const end=Math.min(start+2,doc.numPages); // 命中页起连续3页
+      for(let p=start;p<=end;p++){
+        const page=await doc.getPage(p);
+        const vp0=page.getViewport({scale:1});
+        const vp=page.getViewport({scale:Math.min(720/vp0.width,1.6)});
+        const cv=document.createElement('canvas');
+        cv.width=vp.width;cv.height=vp.height;
+        cv.style.cssText='width:100%;display:block;border-bottom:1px solid var(--line2)';
+        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        wrap.appendChild(cv);
+      }
+      const tip=document.createElement('div');
+      tip.className='tip';tip.style.padding='6px 8px';
+      tip.textContent='原文预览：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页';
+      box.appendChild(tip);box.insertBefore(wrap,box.firstChild);
+      box.scrollTop=0;
+    }else if(/\.docx$/i.test(name)){
+      await loadMammoth();
+      const buf=await fetchDoc(url);
+      const d=await window.mammoth.convertToHtml({arrayBuffer:buf});
+      const wrap=document.createElement('div');
+      wrap.style.cssText='padding:12px 16px;font-size:13.5px;line-height:1.8';
+      wrap.innerHTML=d.value||'<span class="tip">此文档没有可显示的文本内容</span>';
+      box.innerHTML='';box.appendChild(wrap);
+      const tip=document.createElement('div');
+      tip.className='tip';tip.style.padding='6px 8px';
+      tip.textContent='docx 原文预览（转换显示，表格/图片样式可能简化）';
+      box.appendChild(tip);
+    }else if(/\.(md|txt|csv)$/i.test(name)){
+      const buf=await fetchDoc(url);
+      const txt=new TextDecoder('utf-8').decode(buf);
+      const wrap=document.createElement('pre');
+      wrap.style.cssText='padding:12px 16px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;font-family:inherit';
+      wrap.textContent=txt.slice(0,20000)||'（空文档）';
+      box.innerHTML='';box.appendChild(wrap);
+    }else{
+      box.innerHTML='<div class="tip" style="padding:8px">该格式（'+esc(name.split('.').pop())+'）不支持内嵌预览，请用「查看全文」或「新窗口打开」</div>';
+    }
   }catch(e){
-    box.innerHTML='<div class="tip" style="padding:6px 2px">缩略图生成失败（不影响查看全文）</div>';
+    box.innerHTML='<div class="tip" style="padding:8px">预览加载失败（'+esc(e.message)+'），可用「查看全文」或「新窗口打开」</div>';
   }
 }
 
