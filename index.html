@@ -141,7 +141,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <div class="modal" id="mFull" style="width:min(920px,94vw);height:min(88vh,900px)">
   <div class="m-h"><span id="fullTitle">查看全文</span><button onclick="closeAll()">&times;</button></div>
   <div class="m-b" style="height:calc(100% - 52px);padding:0;overflow:hidden">
-    <iframe id="fullFrame" style="width:100%;height:100%;border:0" src="about:blank"></iframe>
+    <div id="fullBody" style="width:100%;height:100%;overflow:auto;background:#fff"></div>
   </div>
 </div>
 
@@ -291,12 +291,42 @@ function loadCfg(){
 }
 function saveCfg(){localStorage.setItem(LS,JSON.stringify(S));}
 
-function viewFull(el){
+async function viewFull(el){
   const u=el.getAttribute('data-u'),t=el.getAttribute('data-t')||'查看全文';
   $('fullTitle').textContent=t;
-  $('fullFrame').src=u;
   $('mask').classList.add('on');
   $('mFull').classList.add('on');
+  const body=$('fullBody');
+  body.innerHTML='<div class="tip" style="padding:16px">加载中…</div>';
+  try{
+    if(/\.pdf$/i.test(t)){
+      await loadPdfJs();
+      const doc=await pdfjsLib.getDocument({url:u}).promise;
+      body.innerHTML='';
+      for(let p=1;p<=doc.numPages;p++){
+        const page=await doc.getPage(p);
+        const vp0=page.getViewport({scale:1});
+        const vp=page.getViewport({scale:Math.min(860/vp0.width,2)});
+        const cv=document.createElement('canvas');
+        cv.width=vp.width;cv.height=vp.height;
+        cv.style.cssText='width:100%;max-width:860px;display:block;margin:0 auto 4px';
+        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        body.appendChild(cv);
+      }
+    }else if(/\.docx$/i.test(t)){
+      await loadMammoth();
+      const d=await window.mammoth.convertToHtml({arrayBuffer:await fetchDoc(u)});
+      body.innerHTML='<div style="padding:16px 24px;font-size:14px;line-height:1.9;max-width:860px;margin:0 auto">'+(d.value||'<span class="tip">此文档没有可显示的文本内容</span>')+'</div>';
+    }else if(/\.(md|txt|csv)$/i.test(t)){
+      const txt=new TextDecoder('utf-8').decode(await fetchDoc(u));
+      body.innerHTML='<pre style="padding:16px 24px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.8;font-family:inherit;max-width:860px;margin:0 auto">'+esc(txt)+'</pre>';
+    }else{
+      // 其他格式退回新窗口打开（浏览器自身能力）
+      body.innerHTML='<div class="tip" style="padding:16px">该格式不支持站内直接展示，<a href="'+esc(u)+'" target="_blank" rel="noopener">点此在新窗口打开</a></div>';
+    }
+  }catch(e){
+    body.innerHTML='<div class="tip" style="padding:16px">加载失败（'+esc(e.message)+'），可<a href="'+esc(u)+'" target="_blank" rel="noopener">在新窗口打开</a></div>';
+  }
 }
 
 // 把图片转成单页 PDF（绕过智谱图片直传处理失败的问题）
@@ -645,7 +675,7 @@ function openUpload(){
   $('uKb').innerHTML=S.libs.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join('');
   $('mask').classList.add('on');$('mUp').classList.add('on');
 }
-function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');$('mFull').classList.remove('on');setTimeout(()=>{if(!$('mFull').classList.contains('on'))$('fullFrame').src='about:blank';},300);}
+function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');$('mFull').classList.remove('on');}
 
 function pickFiles(fs){
   const imgMax=IMG_MAX_MB*1024*1024;
@@ -825,6 +855,9 @@ $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
 $('devIdBox').textContent=DEV_ID;
+// 页面打开就后台预载 pdf.js / mammoth，搜索时预览零等待
+loadPdfJs().catch(()=>{});
+loadMammoth().catch(()=>{});
 (async()=>{
   await pullRemote();
   S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;
