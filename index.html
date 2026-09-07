@@ -571,8 +571,7 @@ async function regDevice(){
         const r=await fetch(api,{headers:H});
         if(r.status===200){
           const j=await r.json();
-          const old=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/
-/g,'')),c=>c.charCodeAt(0))));
+          const old=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0))));
           old.last=now;
           body={message:'device',branch:'main',sha:j.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(old))))};
         }else if(r.status!==404)throw new Error('HTTP '+r.status);
