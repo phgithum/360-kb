@@ -451,6 +451,16 @@ function updScope(){
 
 async function doSearch(){
   const q=$('q').value.trim();if(!q)return;
+  try{ // 搜索词统计（存本机，后台可看）
+    const raw=JSON.parse(localStorage.getItem('kb_qstats')||'{}');
+    const k=q.toLowerCase();
+    if(!raw[k])raw[k]={n:0,last:''};
+    raw[k].n++;raw[k].last=new Date().toLocaleString('zh-CN');
+    const keys=Object.keys(raw);
+    if(keys.length>500){keys.sort((a,b)=>raw[a].last<raw[b].last?-1:1).slice(0,keys.length-500).forEach(x=>delete raw[x]);}
+    localStorage.setItem('kb_qstats',JSON.stringify(raw));
+  }catch(e){}
+  flushStat(q);
   S.recall=$('recall').value;S.topk=+ $('topk').value;saveCfg();
   const ids=scopeIds();
   if(!ids.length){alert('没有选中任何知识库');return;}
@@ -466,8 +476,36 @@ async function doSearch(){
   }finally{b.disabled=false;b.textContent='检索';}
 }
 
-function hl(text,q){
-  const raw=String(text==null?'':text);
+// 全平台搜索统计：把词条写到 stats 仓库（后台发布的 token，只对统计仓库有权限）
+function flushStat(q){
+  if(!CFG.stats_token||!CFG.stats_repo)return;
+  const H={'Authorization':'Bearer '+CFG.stats_token,'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'kb-stats'};
+  const d=new Date(),pad=n=>String(n).padStart(2,'0');
+  const path='data/'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+'.json';
+  const api='https://api.github.com/repos/'+CFG.stats_repo+'/contents/'+path;
+  (async()=>{
+    for(let i=0;i<4;i++){ // 并发写同小时文件可能冲突，重试 4 次
+      try{
+        const body={message:'stat',branch:'main'};
+        const r=await fetch(api,{headers:H});
+        let obj={};
+        if(r.status===200){
+          const j=await r.json();
+          try{obj=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0))))||{};}catch(e){obj={};}
+          body.sha=j.sha;
+        }else if(r.status!==404)throw new Error('HTTP '+r.status);
+        const k=q.toLowerCase();
+        obj[k]=(obj[k]||0)+1;
+        body.content=btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+        const w=await fetch(api,{method:'PUT',headers:H,body:JSON.stringify(body)});
+        if(w.status===200||w.status===201)return;
+        if(w.status!==409)throw new Error('write '+w.status);
+      }catch(e){if(i===3)return;}
+    }
+  })();
+}
+
+function hl(text,q){  const raw=String(text==null?'':text);
   // 1. 生成候选词：把查询串按分隔符拆开，再从每段里取出所有 >=2 字的连续子串
   const segs=q.split(/[\s,，。、？?！!]+/).filter(Boolean).slice(0,8);
   const cands=new Set();
