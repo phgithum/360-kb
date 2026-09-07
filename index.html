@@ -265,6 +265,18 @@ function showDenied(){
 }
 const $=id=>document.getElementById(id);
 
+// ============ 平台配置（后台发布 → GitHub 仓库 config.json → 前台每次打开拉取）============
+const REPO_CFG='https://raw.githubusercontent.com/phgithum/360-kb/main/config.json';
+async function pullRemote(){
+  try{
+    const r=await fetch(REPO_CFG+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(d&&d.config)Object.assign(CFG,d.config);
+    applyCFG();
+  }catch(e){/* 拉取失败就用本地/默认配置 */}
+}
+
 function loadCfg(){
   try{const c=JSON.parse(localStorage.getItem(LS)||'{}');S=Object.assign(S,c);}catch(e){}
   $('sKey').value=S.key||'';
@@ -554,10 +566,13 @@ $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
 $('devIdBox').textContent=DEV_ID;
-if(accessDenied()){
-  showDenied();
-}else if(S.key&&CFG.auto!==false)loadLibs(true);
-else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
+(async()=>{
+  await pullRemote();
+  S.recall=CFG.recall||S.recall;S.topk=CFG.topk||S.topk;
+  if(accessDenied()){showDenied();return;}
+  if(S.key&&CFG.auto!==false)loadLibs(true);
+  else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
+})();
 </script>
 </body>
 </html>
