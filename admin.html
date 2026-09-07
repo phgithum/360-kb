@@ -229,6 +229,18 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
   </div>
 
   <div class="card">
+    <h3>接入设备</h3>
+    <div class="sub">所有打开过检索台的设备（按设备码）自动登记在这里，含首次接入和最近活跃时间。</div>
+    <div class="row">
+      <div class="inline">
+        <button style="padding:5px 14px" onclick="viewDevices(this)">刷新设备列表</button>
+        <span class="tip" style="margin:0" id="devCount2"></span>
+      </div>
+    </div>
+    <div class="row" id="devOut"><div class="tip" style="padding:4px">点「刷新设备列表」查看。</div></div>
+  </div>
+
+  <div class="card">
     <h3>全平台发布</h3>
     <div class="sub">把当前配置写入 GitHub 仓库的 config.json，<b>所有设备</b>打开检索台约 1 分钟内自动生效。Token 只保存在你本机浏览器，不会进网页代码。</div>
     <div class="row">
@@ -388,6 +400,47 @@ function collect(){
   };
 }
 
+async function viewDevices(btn){
+  const repo=CFG.stats_repo||'phgithum/360-kb-stats';
+  const tok=(CFG.stats_t1||'')+(CFG.stats_t2||'')||$('aStatTok').value.trim();
+  const out=$('devOut');
+  if(!tok){out.innerHTML='<div class="tip" style="padding:4px;color:#c00">先在「搜索统计」里填统计 Token 并保存</div>';return;}
+  btn.disabled=true;btn.textContent='读取中…';
+  try{
+    const H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json','User-Agent':'kb-stats'};
+    let files=[],page=1;
+    while(true){
+      const r=await fetch('https://api.github.com/repos/'+repo+'/contents/devices?ref=main&per_page=100&page='+page,{headers:H});
+      if(!r.ok)throw new Error(r.status===404?'还没有任何设备接入过':'HTTP '+r.status);
+      const list=await r.json();
+      if(!Array.isArray(list)||!list.length)break;
+      files=files.concat(list.filter(x=>x.type==='file'&&x.name.endsWith('.json')));
+      if(list.length<100)break;
+      page++;if(page>10)break;
+    }
+    const rows=[];
+    for(const f of files.slice(0,300)){
+      try{
+        const r=await fetch('https://api.github.com/repos/'+repo+'/contents/devices/'+f.name+'?ref=main',{headers:H});
+        if(!r.ok)continue;
+        const j=await r.json();
+        const o=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/
+/g,'')),c=>c.charCodeAt(0))))||{};
+        rows.push(o);
+      }catch(e){}
+    }
+    rows.sort((a,b)=>String(b.last||'').localeCompare(String(a.last||'')));
+    $('devCount2').textContent='共 '+rows.length+' 台设备';
+    if(!rows.length){out.innerHTML='<div class="tip" style="padding:4px">还没有设备数据</div>';return;}
+    out.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<tr style="text-align:left;color:#888"><td style="padding:4px 8px;border-bottom:1px solid #eee">设备码</td><td style="padding:4px 8px;border-bottom:1px solid #eee">首次接入</td><td style="padding:4px 8px;border-bottom:1px solid #eee">最近活跃</td></tr>'
+      +rows.map(o=>'<tr><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7;font-family:monospace;font-size:12px" title="'+esc(o.id||'')+'">'+esc((o.id||'').slice(0,13))+'…</td><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7">'+esc(o.first||'-')+'</td><td style="padding:4px 8px;border-bottom:1px solid #f4f5f7">'+esc(o.last||'-')+'</td></tr>').join('')
+      +'</table>';
+  }catch(e){
+    out.innerHTML='<div class="tip" style="padding:4px;color:#c00">读取失败：'+esc(e.message)+'</div>';
+  }finally{btn.disabled=false;btn.textContent='刷新设备列表';}
+}
+
 async function viewStats(btn){
   const repo=$('aStatRepo').value.trim(),tok=(CFG.stats_t1||'')+(CFG.stats_t2||'')||$('aStatTok').value.trim();
   if(!repo||!tok){alert('请先填统计仓库名和统计 Token');return;}
@@ -541,7 +594,7 @@ async function tryUnlock(){
     const d=await r.json();
     if(d.code!==200&&d.code!==0)throw new Error(d.message||('HTTP '+r.status));
     saveKey(k);
-    try{sessionStorage.setItem('kb_admin_gate','1');}catch(e){}
+    try{sessionStorage.setItem('kb_admin_gate','1');localStorage.setItem('kb_admin_gate','1');}catch(e){}
     $('gate').style.display='none';
     $('aKey').value=k;
     setStatus(false,'已读取本机 Key，点「加载知识库列表」开始');
@@ -551,7 +604,10 @@ async function tryUnlock(){
   }
 }
 $('gateKey').addEventListener('keydown',e=>{if(e.key==='Enter')tryUnlock();});
-try{if(sessionStorage.getItem('kb_admin_gate')==='1')$('gate').style.display='none';}catch(e){}
+// 记住解锁状态：本机验证过一次就永久放行，不再每次重复输 Key
+try{
+  if(localStorage.getItem('kb_admin_gate')==='1'||(sessionStorage.getItem('kb_admin_gate')==='1')){$('gate').style.display='none';}
+}catch(e){}
 
 CFG=(function(){try{return Object.assign({},DEF,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){return Object.assign({},DEF);}})();
 fillForm();
