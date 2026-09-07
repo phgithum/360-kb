@@ -458,17 +458,27 @@ function hl(text,q){
 
 function renderResults(data,q){
   if(!data.length){$('list').innerHTML='<div class="empty">没有找到相关内容，换个关键词或试试「混合检索」</div>';return;}
+  // 同一文档的多个片段命中只保留相关度最高的一条，标注命中片段数
+  const seen={},list=[];
+  for(const it of data){
+    const m=it.metadata||{};
+    const key=(m.doc_url||m.doc_name||'')+'#'+(m.page_index!=null?m.page_index:'');
+    if(seen[key]){seen[key].n++;continue;}
+    seen[key]=it;it.n=1;list.push(it);
+  }
   let h='';
-  data.forEach((it,i)=>{
+  list.forEach((it,i)=>{
     const m=it.metadata||{};
     const url=m.doc_url||'';
+    const isPdf=/\.pdf$/i.test(String(m.doc_name||''))||m.doc_type==='pdf';
     h+='<div class="card">'
       +'<div class="c-h"><span class="c-idx">'+(i+1)+'</span>'
       +'<span class="c-doc">'+esc(m.doc_name||'未命名文档')+'</span>'
       +'<span class="c-kb">'+esc(kbName(m.knowledge_id))+'</span>'
+      +(it.n>1?'<span class="c-kb" style="color:var(--main)">命中 '+it.n+' 处</span>':'')
       +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
-      +(url&&IMG_EXT.some(e=>String(m.doc_name||'').toLowerCase().endsWith('.'+e))?'<div style="margin:8px 0"><img src="'+esc(url)+'" alt="命中图片" style="max-width:100%;max-height:300px;border:1px solid var(--line);border-radius:6px" loading="lazy"></div>':'')
+      +(url&&isPdf?'<div class="c-thumb" data-u="'+esc(url)+'" data-p="'+(m.page_index!=null?m.page_index:0)+'"><div class="tip" style="padding:6px 2px">正在生成命中页缩略图…</div></div>':'')
       +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
       +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
       +'</div>'
@@ -476,6 +486,44 @@ function renderResults(data,q){
       +'</div>';
   });
   $('list').innerHTML=h;
+  document.querySelectorAll('.c-thumb').forEach(renderThumb);
+}
+
+// ============ PDF 命中页缩略图（pdf.js 渲染） ============
+let _pdfjsP=null;
+function loadPdfJs(){
+  if(window.pdfjsLib)return Promise.resolve();
+  if(_pdfjsP)return _pdfjsP;
+  _pdfjsP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res();};
+    s.onerror=()=>rej(new Error('pdf.js 加载失败'));
+    document.head.appendChild(s);
+  });
+  return _pdfjsP;
+}
+const _thumbCache={};
+async function renderThumb(box){
+  const url=box.getAttribute('data-u');
+  const pageNo=parseInt(box.getAttribute('data-p')||'1',10)+1; // page_index 从 0 计
+  try{
+    await loadPdfJs();
+    let doc=_thumbCache[url];
+    if(!doc){doc=await pdfjsLib.getDocument({url}).promise;_thumbCache[url]=doc;}
+    const page=await doc.getPage(Math.min(Math.max(1,pageNo),doc.numPages));
+    const vp0=page.getViewport({scale:1});
+    const scale=Math.min(560/vp0.width,420/vp0.height,2);
+    const vp=page.getViewport({scale});
+    const cv=document.createElement('canvas');
+    cv.width=vp.width;cv.height=vp.height;
+    await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+    cv.style.cssText='max-width:100%;border:1px solid var(--line);border-radius:6px;display:block';
+    box.innerHTML='<div class="tip" style="padding:2px 2px 6px">命中页预览（第 '+pageNo+' 页 / 共 '+doc.numPages+' 页）</div>';
+    box.appendChild(cv);
+  }catch(e){
+    box.innerHTML='<div class="tip" style="padding:6px 2px">缩略图生成失败（不影响查看全文）</div>';
+  }
 }
 
 async function autoCat(){
