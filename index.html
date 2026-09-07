@@ -543,23 +543,37 @@ async function renderPreview(box){
       let doc=_docCache[url];
       if(!doc){doc=await pdfjsLib.getDocument({url}).promise;_docCache[url]=doc;}
       const wrap=document.createElement('div');
+      wrap.style.cssText='display:flex;gap:8px;padding:8px;overflow-x:auto;align-items:flex-start';
       box.innerHTML='';
       const start=Math.min(Math.max(1,hit0+1),doc.numPages);
-      const end=Math.min(start+2,doc.numPages); // 命中页起连续3页
-      for(let p=start;p<=end;p++){
-        const page=await doc.getPage(p);
-        const vp0=page.getViewport({scale:1});
-        const vp=page.getViewport({scale:Math.min(720/vp0.width,1.6)});
-        const cv=document.createElement('canvas');
-        cv.width=vp.width;cv.height=vp.height;
-        cv.style.cssText='width:100%;display:block;border-bottom:1px solid var(--line2)';
-        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-        wrap.appendChild(cv);
-      }
+      const end=Math.min(start+5,doc.numPages); // 命中页起连续6页缩略图
+      const jobs=[];
+      for(let p=start;p<=end;p++)jobs.push((async()=>{
+        try{
+          const page=await doc.getPage(p);
+          const vp0=page.getViewport({scale:1});
+          const tw=170; // 缩略图宽170px，按比例缩放
+          const vp=page.getViewport({scale:tw/vp0.width});
+          const cv=document.createElement('canvas');
+          cv.width=vp.width;cv.height=vp.height;
+          cv.style.cssText='width:'+tw+'px;display:block;border:1px solid var(--line2);border-radius:3px;flex:none';
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          const cell=document.createElement('div');
+          cell.style.cssText='flex:none;text-align:center';
+          cell.appendChild(cv);
+          const lb=document.createElement('div');
+          lb.style.cssText='font-size:11px;color:#888;margin-top:2px';
+          lb.textContent='第'+p+'页';
+          cell.appendChild(lb);
+          wrap.appendChild(cell);
+        }catch(e){}
+      })());
+      await Promise.all(jobs); // 多页并行渲染，比逐页快
+      if(!wrap.children.length)wrap.innerHTML='<span class="tip">页面渲染失败</span>';
       const tip=document.createElement('div');
       tip.className='tip';tip.style.padding='4px 8px';
-      tip.textContent='原文预览：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页';
-      box.appendChild(tip);box.insertBefore(wrap,box.firstChild);
+      tip.textContent='原文缩略图：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页（横向滑动查看更多）';
+      box.appendChild(tip);box.appendChild(wrap);
       box.appendChild(prevFooter(url,name));
       box.scrollTop=0;
     }else if(/\.docx$/i.test(name)){
