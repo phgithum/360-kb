@@ -424,8 +424,7 @@ async function viewDevices(btn){
         const r=await fetch('https://api.github.com/repos/'+repo+'/contents/devices/'+f.name+'?ref=main',{headers:H});
         if(!r.ok)continue;
         const j=await r.json();
-        const o=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/
-/g,'')),c=>c.charCodeAt(0))))||{};
+        const o=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0))))||{};
         rows.push(o);
       }catch(e){}
     }
