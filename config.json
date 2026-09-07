@@ -1,0 +1,68 @@
+{
+  "name": "main",
+  "config": {
+    "kb_whitelist": [
+      "2096805006861918208"
+    ],
+    "ok_ext": [
+      "md",
+      "txt",
+      "pdf",
+      "doc",
+      "docx",
+      "ppt",
+      "pptx",
+      "xls",
+      "xlsx",
+      "csv"
+    ],
+    "img_ext": [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp"
+    ],
+    "img_max": 5,
+    "media_ext": [
+      "mp4",
+      "mov",
+      "avi",
+      "mkv",
+      "webm",
+      "flv",
+      "wmv",
+      "m4v",
+      "mp3",
+      "wav",
+      "m4a",
+      "gif",
+      "bmp",
+      "svg",
+      "tif",
+      "tiff"
+    ],
+    "maxmb": 20,
+    "limits": {
+      "md": 5,
+      "txt": 5,
+      "csv": 10,
+      "doc": 20,
+      "docx": 20,
+      "xls": 20,
+      "xlsx": 20,
+      "pdf": 20,
+      "ppt": 50,
+      "pptx": 50
+    },
+    "model": "glm-4.6",
+    "ktype": "1",
+    "ssize": 300,
+    "pimg": false,
+    "recall": "keyword",
+    "topk": 10,
+    "auto": true,
+    "access_mode": "open",
+    "allowed_devices": []
+  },
+  "updated_at": "2026-09-07T13:14:36+08:00"
+}
