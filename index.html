@@ -99,6 +99,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
   <button onclick="openUpload()" data-page-node-id="bZRvU7rGNywxxjLP6xBNJr">上传知识</button>
+  <button onclick="window.open('admin.html')" data-page-node-id="bZRvU7rGNywxxjLP6xBNJr">后台管理</button>
   <button onclick="openSet()" data-page-node-id="W0srroshcWDIXEIUA8knLF">设置</button>
 </header>
 
@@ -147,29 +148,8 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
       <div class="tip" data-page-node-id="nYq8NLYGToYO2fOSzaN0Qa">只保存在本机浏览器，不会上传到任何地方，也不会写进网页代码。</div>
     </div>
     <div class="row" data-page-node-id="iFjHz6sBjI89fTF7cJMwJp">
-      <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">AI 归类模型</label>
-      <input id="sModel" value="glm-4.6" data-page-node-id="Eb7GbnbnyWhp8W3gr6iT6W">
-      <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">用于自动生成左侧分类。若提示模型不存在，改成 glm-4-flash 试试。</div>
-    </div>
-    <div class="row" data-page-node-id="i2owBChCnvOeAOPQfh8wPq">
-      <label data-page-node-id="iX5FJVPP8B5yMGF59Xh9vF">默认切片方式</label>
-      <select id="sType" data-page-node-id="wq2w62IY7RwH55dbUcLHml">
-        <option value="1" data-page-node-id="5e5JpTw99RZXCw5gu1NsEJ">按标题段落切（推荐，支持 md/doc/pdf/docx/pptx/txt）</option>
-        <option value="2" data-page-node-id="SX4INXlkCu2QcmSySiMEFQ">按问答对切（适合 FAQ 话术）</option>
-        <option value="3" data-page-node-id="U06tXBHCgxgwaU3FTDPcma">按行切（适合 xls/csv 表格）</option>
-        <option value="6" data-page-node-id="lT7WpGCyAjHGlIZ1jz44AG">按页切（适合 pdf/ppt）</option>
-      </select>
-    </div>
-    <div class="row">
-      <label>单文件大小上限（MB）</label>
-      <input id="sMax" type="number" min="1" max="50" value="20">
-      <div class="tip">超过上限的文件会被拦截，防止知识库存储膨胀产生费用（1–50）。</div>
-    </div>
-    <div class="row" data-page-node-id="l1WabaqGLgb9v2ue3M96Jj">
-      <div class="chk" data-page-node-id="wqvBjZwUrYskpp3csJ0g4I">
-        <label data-page-node-id="JUTtqPhEYSO7w4kTH0LJwu"><input type="checkbox" id="sImg" data-page-node-id="LG5qOpImwilU6LTkh0xW2f"> 上传时解析图片</label>
-        <label data-page-node-id="Sr4TVi7LVzaESb1sVh6YUy"><input type="checkbox" id="sAuto" checked data-page-node-id="s8DkSgcKoRqh1aiFx8aHwJ"> 打开页面自动加载知识库</label>
-      </div>
+      <label data-page-node-id="4EpaoUMrKExRdOK83yvSVK">高级参数</label>
+      <div class="tip" data-page-node-id="BVUTufM1DXGvhEG3EGIoqh">知识库范围、格式白名单、大小上限、切片方式、AI 模型等参数已移到<a href="admin.html" target="_blank" style="color:var(--main)">专用后台</a>统一管理，修改后刷新本页生效。</div>
     </div>
   </div>
   <div class="m-f" data-page-node-id="UzWrO4BmdSNfbP3rvzHwxU">
@@ -189,7 +169,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
     <div class="row" data-page-node-id="OrzwseEsQYlYR6oPzBjKIh">
       <label data-page-node-id="StQOna4NYQ8Xaw8mC5nyOB">上传文件</label>
       <div class="drop" id="drop" onclick="document.getElementById('uFile').click()" data-page-node-id="phvGBRfWXtWqRZ9E5GYxw2">
-        点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / ppt / pptx / xls / xlsx / csv，单个不超过设置里的大小上限（默认 20MB）<br>视频、图片等媒体文件会被自动拦截
+        点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / ppt / pptx / xls / xlsx / csv，单个不超过设置里的大小上限（默认 20MB）<br>图片支持 jpg / jpeg / png / webp，单张不超过 5MB；视频、音频会被自动拦截
       </div>
       <input type="file" id="uFile" multiple style="display:none" onchange="pickFiles(this.files)" data-page-node-id="0UhySwW18NqWBHz0JcrDFy">
       <div class="files" id="uFiles" data-page-node-id="2KgDu1yFs7ygiBE1gvqK8Z"></div>
@@ -211,24 +191,39 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 const BASE='https://open.bigmodel.cn/api/llm-application/open';
 const CHAT='https://open.bigmodel.cn/api/paas/v4/chat/completions';
 const LS='kb_cfg_v1';
-// 只接入这些知识库（按 id）。留空 [] 表示显示全部。
-// 新建知识库后把它的 id 加进来即可，id 可在智谱后台或浏览器控制台查看。
-const KB_WHITELIST=['2096805006861918208'];
-// 上传白名单：只允许这些文档格式入库；视频/图片等一律拦截
-const OK_EXT=['md','txt','pdf','doc','docx','ppt','pptx','xls','xlsx','csv'];
-// 媒体扩展名（用于拦截带媒体直链的 URL）
-const MEDIA_EXT=['mp4','mov','avi','mkv','webm','flv','wmv','m4v','jpg','jpeg','png','gif','webp','bmp','svg','mp3','wav','m4a'];
+const ADMIN_LS='kb_admin_v1';
+// 默认参数（可被后台 admin.html 保存的配置覆盖）
+const DEF={
+  kb_whitelist:['2096805006861918208'],
+  ok_ext:['md','txt','pdf','doc','docx','ppt','pptx','xls','xlsx','csv'],
+  img_ext:['jpg','jpeg','png','webp'],
+  img_max:5,
+  media_ext:['mp4','mov','avi','mkv','webm','flv','wmv','m4v','mp3','wav','m4a','gif','bmp','svg','tif','tiff'],
+  maxmb:20,
+  model:'glm-4.6',
+  ktype:'1',
+  ssize:300,
+  pimg:false,
+  recall:'keyword',
+  topk:10,
+  auto:true
+};
+let CFG=Object.assign({},DEF);
+try{Object.assign(CFG,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){}
+const KB_WHITELIST=CFG.kb_whitelist||[];
+const OK_EXT=CFG.ok_ext||DEF.ok_ext;
+const IMG_EXT=CFG.img_ext||DEF.img_ext;
+const IMG_MAX_MB=CFG.img_max||5;
+const MEDIA_EXT=CFG.media_ext||DEF.media_ext;
 
-let S={key:'',libs:[],cats:null,sel:'ALL',recall:'keyword',topk:10,model:'glm-4.6',ktype:'1',pimg:false,auto:true,maxmb:20};
+let S={key:'',libs:[],cats:null,sel:'ALL',recall:CFG.recall||'keyword',topk:CFG.topk||10};
 let PENDING=[];
 let REJECTED=[];
 const $=id=>document.getElementById(id);
 
 function loadCfg(){
   try{const c=JSON.parse(localStorage.getItem(LS)||'{}');S=Object.assign(S,c);}catch(e){}
-  $('sKey').value=S.key||'';$('sModel').value=S.model;$('sType').value=S.ktype;
-  $('sMax').value=S.maxmb||20;
-  $('sImg').checked=!!S.pimg;$('sAuto').checked=S.auto!==false;
+  $('sKey').value=S.key||'';
   $('recall').value=S.recall;$('topk').value=String(S.topk);
 }
 function saveCfg(){localStorage.setItem(LS,JSON.stringify(S));}
@@ -358,7 +353,7 @@ async function autoCat(){
   const b=$('catBtn');b.disabled=true;b.textContent='归类中';
   try{
     const list=S.libs.map(k=>k.id+' :: '+k.name).join('\n');
-    const body={model:S.model,temperature:0.2,messages:[
+    const body={model:CFG.model,temperature:0.2,messages:[
       {role:'system',content:'你是企业知识库的分类助手。给定一批知识库的 id 和名称，请按业务品类把它们分组。只输出 JSON，格式 {"类目名":["id1","id2"]}。类目名用简短中文，不超过 6 个字，数量控制在 2-8 个。每个 id 必须且只能出现一次。不要输出任何解释文字。'},
       {role:'user',content:list}
     ]};
@@ -395,16 +390,25 @@ function openUpload(){
 function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');}
 
 function pickFiles(fs){
-  const max=(S.maxmb||20)*1024*1024;
+  const max=(CFG.maxmb||20)*1024*1024;
+  const imgMax=IMG_MAX_MB*1024*1024;
   REJECTED=[];
   for(const f of Array.from(fs)){
     const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(IMG_EXT.includes(ext)){
+      if(f.size>imgMax){
+        REJECTED.push(f.name+'（已拦截：图片超过 '+IMG_MAX_MB+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
+      }else{
+        PENDING.push(f);
+      }
+      continue;
+    }
     if(!OK_EXT.includes(ext)){
-      REJECTED.push(f.name+'（已拦截：'+(MEDIA_EXT.includes(ext)?'视频/音频/图片无法收入知识库':'不支持的格式')+'）');
+      REJECTED.push(f.name+'（已拦截：'+(MEDIA_EXT.includes(ext)?'视频/音频无法收入知识库':'不支持的格式')+'）');
       continue;
     }
     if(f.size>max){
-      REJECTED.push(f.name+'（已拦截：超过 '+S.maxmb+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
+      REJECTED.push(f.name+'（已拦截：超过 '+CFG.maxmb+'MB 上限，实际 '+(f.size/1024/1024).toFixed(1)+'MB）');
       continue;
     }
     PENDING.push(f);
@@ -452,9 +456,9 @@ async function doUpload(){
     try{
       const fd=new FormData();
       fd.append('files',f);
-      fd.append('knowledge_type',S.ktype);
-      fd.append('sentence_size','300');
-      fd.append('parse_image',S.pimg?'true':'false');
+      fd.append('knowledge_type',CFG.ktype);
+      fd.append('sentence_size',String(CFG.ssize||300));
+      fd.append('parse_image',CFG.pimg?'true':'false');
       const r=await fetch(BASE+'/document/upload_document/'+kb,{
         method:'POST',headers:{'Authorization':'Bearer '+S.key},body:fd
       });
@@ -497,11 +501,6 @@ async function testKey(){
 
 function saveSet(){
   S.key=$('sKey').value.trim();
-  S.model=$('sModel').value.trim()||'glm-4.6';
-  S.ktype=$('sType').value;
-  S.maxmb=Math.min(50,Math.max(1,+$('sMax').value||20));
-  S.pimg=$('sImg').checked;
-  S.auto=$('sAuto').checked;
   saveCfg();closeAll();
   if(S.key)loadLibs();
 }
@@ -510,7 +509,7 @@ $('recall').onchange=()=>{S.recall=$('recall').value;saveCfg();updScope();};
 $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
-if(S.key&&S.auto!==false)loadLibs(true);
+if(S.key&&CFG.auto!==false)loadLibs(true);
 else{setStatus(false,'未连接 · 请填写 API Key');openSet();}
 </script>
 </body>
