@@ -62,7 +62,8 @@
     "topk": 10,
     "auto": true,
     "access_mode": "open",
-    "allowed_devices": []
+    "allowed_devices": [],
+    "upload_pass": "12345678"
   },
-  "updated_at": "2026-09-07T13:14:36+08:00"
+  "updated_at": "2026-09-07T13:24:18+08:00"
 }
