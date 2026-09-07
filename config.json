@@ -1,7 +1,9 @@
 {
   "name": "main",
   "config": {
-    "kb_whitelist": [],
+    "kb_whitelist": [
+      "2096886582564073472"
+    ],
     "ok_ext": [
       "md",
       "txt",
