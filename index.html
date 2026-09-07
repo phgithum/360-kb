@@ -138,6 +138,13 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <div class="mask" id="mask" onclick="closeAll()" data-page-node-id="NL8Ezboe4osz4n1dATpCi0"></div>
 
+<div class="modal" id="mFull" style="width:min(920px,94vw);height:min(88vh,900px)">
+  <div class="m-h"><span id="fullTitle">查看全文</span><button onclick="closeAll()">&times;</button></div>
+  <div class="m-b" style="height:calc(100% - 52px);padding:0;overflow:hidden">
+    <iframe id="fullFrame" style="width:100%;height:100%;border:0" src="about:blank"></iframe>
+  </div>
+</div>
+
 <div class="modal" id="mSet" data-page-node-id="h5vZ42ZvJXGMoIlSYuG4x4">
   <div class="m-h" data-page-node-id="YBoDzCdIExQMSjhmyvp8YO">设置<button onclick="closeAll()" data-page-node-id="EWGZAh4QN7Jq8js1zqcWEr">&times;</button></div>
   <div class="m-b" data-page-node-id="fuRl0HlpCCWdTpnHKeyi5D">
@@ -284,6 +291,47 @@ function loadCfg(){
 }
 function saveCfg(){localStorage.setItem(LS,JSON.stringify(S));}
 
+function viewFull(el){
+  const u=el.getAttribute('data-u'),t=el.getAttribute('data-t')||'查看全文';
+  $('fullTitle').textContent=t;
+  $('fullFrame').src=u;
+  $('mask').classList.add('on');
+  $('mFull').classList.add('on');
+}
+
+// 把图片转成单页 PDF（绕过智谱图片直传处理失败的问题）
+let _jspdfP=null;
+function loadJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve();
+  if(_jspdfP)return _jspdfP;
+  _jspdfP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=()=>window.jspdf?res():rej(new Error('jsPDF 加载失败'));
+    s.onerror=()=>rej(new Error('jsPDF 加载失败（网络问题）'));
+    document.head.appendChild(s);
+  });
+  return _jspdfP;
+}
+async function imgToPdf(f){
+  await loadJsPdf();
+  const dataUrl=await new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('读取文件失败'));
+    r.readAsDataURL(f);
+  });
+  const dim=await new Promise((res,rej)=>{
+    const im=new Image();
+    im.onload=()=>res({w:im.width,h:im.height});
+    im.onerror=()=>rej(new Error('图片解析失败'));
+    im.src=dataUrl;
+  });
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:dim.w>=dim.h?'l':'p',unit:'pt',format:[dim.w,dim.h]});
+  pdf.addImage(dataUrl,/\.jpe?g$/i.test(f.name)||'image/jpeg'===f.type?'JPEG':'PNG',0,0,dim.w,dim.h);
+  return pdf.output('blob');
+}
+
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 async function api(path,opt={}){
@@ -421,7 +469,7 @@ function renderResults(data,q){
       +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
       +(url&&IMG_EXT.some(e=>String(m.doc_name||'').toLowerCase().endsWith('.'+e))?'<div style="margin:8px 0"><img src="'+esc(url)+'" alt="命中图片" style="max-width:100%;max-height:300px;border:1px solid var(--line);border-radius:6px" loading="lazy"></div>':'')
-      +'<div class="c-f">'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">打开原文</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
+      +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
       +(m.contextual_text?'<button style="padding:3px 10px;font-size:12px" onclick="this.closest(\'.card\').querySelector(\'.c-ctx\').classList.toggle(\'on\')">上下文</button>':'')
       +'</div>'
       +(m.contextual_text?'<div class="c-ctx">'+esc(m.contextual_text)+'</div>':'')
@@ -470,7 +518,7 @@ function openUpload(){
   $('uKb').innerHTML=S.libs.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join('');
   $('mask').classList.add('on');$('mUp').classList.add('on');
 }
-function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');}
+function closeAll(){$('mask').classList.remove('on');$('mSet').classList.remove('on');$('mUp').classList.remove('on');$('mFull').classList.remove('on');setTimeout(()=>{if(!$('mFull').classList.contains('on'))$('fullFrame').src='about:blank';},300);}
 
 function pickFiles(fs){
   const imgMax=IMG_MAX_MB*1024*1024;
@@ -540,16 +588,21 @@ async function doUpload(){
   for(const f of PENDING){
     L('上传文件：'+f.name);
     try{
-      const fd=new FormData();
-      fd.append('files',f);
+      let upFile=f;
       const ext=(f.name.split('.').pop()||'').toLowerCase();
       const isImg=IMG_EXT.includes(ext);
+      if(isImg){
+        // 智谱对图片直传的处理会失败——转成 PDF 再传，图内文字可被正常 OCR 检索
+        L('  检测到图片，自动转换为 PDF…');
+        upFile=await imgToPdf(f);
+      }
+      const fd=new FormData();
+      fd.append('files',upFile,f.name.replace(/\.[^.]+$/,'')+'.pdf');
       if(!isImg){
-        // 图片必须省略 knowledge_type/sentence_size（让智谱自动识别），否则报"不支持的知识类型"
         fd.append('knowledge_type',CFG.ktype);
         fd.append('sentence_size',String(CFG.ssize||300));
       }
-      fd.append('parse_image',CFG.pimg?'true':'false');
+      fd.append('parse_image',isImg?'true':(CFG.pimg?'true':'false'));
       const r=await fetch(BASE+'/document/upload_document/'+kb,{
         method:'POST',headers:{'Authorization':'Bearer '+S.key},body:fd
       });
