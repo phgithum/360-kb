@@ -43,6 +43,8 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
 .kbs .sz{margin-left:auto;font-size:11px;color:var(--tx3)}
 .foot{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px;display:flex;gap:8px;justify-content:center}
 .foot button{padding:8px 22px}
+.limrow{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+.limrow input{width:110px}
 .warnbox{background:#fff7e8;border:1px solid #ffe1ad;border-radius:6px;padding:9px 12px;font-size:12px;color:#8a5b00;line-height:1.7}
 </style>
 </head>
@@ -82,6 +84,31 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
   </div>
 
   <div class="card">
+    <h3>设备与授权</h3>
+    <div class="sub">每台设备第一次打开检索台时生成一个设备码，之后永久不变（存在浏览器本地，不会重复生成）。</div>
+    <div class="row">
+      <label>本机设备码</label>
+      <div class="inline">
+        <input id="devCode" readonly style="width:340px;font-family:monospace">
+        <button onclick="navigator.clipboard&&navigator.clipboard.writeText(getDevId())">复制</button>
+      </div>
+      <div class="tip">清浏览器缓存或用无痕模式会生成新码，正常使用永远同码。</div>
+    </div>
+    <div class="row">
+      <label>访问模式</label>
+      <select id="aAccess" style="width:auto;min-width:220px">
+        <option value="open">开放——任何人都能用</option>
+        <option value="whitelist">白名单——只有名单内设备能用</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>允许的设备码名单（每行一个）</label>
+      <textarea id="aDevices" rows="4" placeholder="把设备码粘进来，每行一个"></textarea>
+      <div class="tip">切到白名单后，名单外的设备打开检索台会被拒绝并显示自己的设备码——同事把它发给你，粘进这里即可。注意：名单要<b>全平台生效</b>需要把配置固化进网页重新发布（导出配置发我即可）。</div>
+    </div>
+  </div>
+
+  <div class="card">
     <h3>上传限制</h3>
     <div class="sub">控制检索台「上传知识」允许什么、拦截什么。视频和音频始终拦截。</div>
     <div class="row">
@@ -89,9 +116,15 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
       <div class="inline" id="docExts"></div>
     </div>
     <div class="row">
-      <label>文档单文件大小上限（MB）</label>
+      <label>各格式单文件大小上限（MB）</label>
+      <div id="limRows"></div>
+      <button style="padding:3px 10px;font-size:12px;margin-top:6px" onclick="addLimRow('','')">+ 添加格式</button>
+      <div class="tip">每行一个格式一个上限，可直接修改或点 × 删除（删除 = 该格式改用下面的默认上限）。</div>
+    </div>
+    <div class="row">
+      <label>其他文档格式默认上限（MB）</label>
       <input type="number" id="aMax" min="1" max="100" value="20">
-      <div class="tip">智谱官方单文件上限 100MB；建议 20MB 左右以防存储膨胀产生费用。</div>
+      <div class="tip">表格里没有单独设置的文档格式按这个上限拦截。智谱官方单文件上限 100MB。</div>
     </div>
     <div class="row">
       <label>图片格式白名单</label>
@@ -189,13 +222,16 @@ const DEF={
   img_max:5,
   media_ext:['mp4','mov','avi','mkv','webm','flv','wmv','m4v','mp3','wav','m4a','gif','bmp','svg','tif','tiff'],
   maxmb:20,
+  limits:{md:5,txt:5,csv:10,doc:20,docx:20,xls:20,xlsx:20,pdf:20,ppt:50,pptx:50},
   model:'glm-4.6',
   ktype:'1',
   ssize:300,
   pimg:false,
   recall:'keyword',
   topk:10,
-  auto:true
+  auto:true,
+  access_mode:'open',
+  allowed_devices:[]
 };
 let CFG=Object.assign({},DEF);
 let KBLIST=[];
@@ -208,6 +244,34 @@ function saveKey(k){
   c.key=k;localStorage.setItem(LS,JSON.stringify(c));
 }
 function setStatus(ok,txt){$('dot').className='dot'+(ok?' on':'');$('hint').textContent=txt;}
+
+const DEV_LS='kb_device_id';
+function getDevId(){
+  let d=null;
+  try{d=localStorage.getItem(DEV_LS);}catch(e){}
+  if(!d){
+    d=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('d-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12));
+    try{localStorage.setItem(DEV_LS,d);}catch(e){}
+  }
+  return d;
+}
+
+function limRowHtml(e,v){
+  return '<div class="limrow"><input class="lim-ext" placeholder="格式如 pdf" value="'+esc(e)+'">'
+    +'<input class="lim-mb" type="number" min="1" max="100" value="'+esc(v)+'" title="上限 MB">'
+    +'<span class="tip" style="margin:0">MB</span>'
+    +'<button onclick="this.parentNode.remove()" style="padding:3px 10px" title="删除该格式">×</button></div>';
+}
+function renderLimRows(){
+  const lim=CFG.limits||{};
+  const ks=Object.keys(lim);
+  $('limRows').innerHTML=ks.length?ks.map(e=>limRowHtml(e,lim[e])).join(''):'<div class="tip" style="padding:4px">暂无单独限制，全部用默认上限</div>';
+}
+function addLimRow(e,v){
+  const empty=$('limRows').querySelector('.tip');
+  if(empty)empty.parentNode.removeChild(empty);
+  $('limRows').insertAdjacentHTML('beforeend',limRowHtml(e||'',v||''));
+}
 
 function renderExtBoxes(){
   $('docExts').innerHTML=DOC_LIST.map(e=>'<label><input type="checkbox" class="docext" value="'+e+'"'+(CFG.ok_ext.includes(e)?' checked':'')+'> '+e+'</label>').join('')
@@ -222,7 +286,11 @@ function fillForm(){
   $('aModel').value=CFG.model;$('aKtype').value=CFG.ktype;
   $('aSsize').value=CFG.ssize;
   $('aPimg').checked=!!CFG.pimg;$('aAuto').checked=CFG.auto!==false;
+  $('aAccess').value=CFG.access_mode||'open';
+  $('aDevices').value=(CFG.allowed_devices||[]).join('\n');
+  $('devCode').value=getDevId();
   renderExtBoxes();
+  renderLimRows();
   renderKBChecks();
 }
 function collect(){
@@ -231,6 +299,13 @@ function collect(){
   const imgSel=Array.from(document.querySelectorAll('.imgext:checked')).map(x=>x.value);
   const media=$('aMedia').value.split(/[\s,，]+/).map(s=>s.trim().toLowerCase().replace(/^\./,'')).filter(Boolean);
   const kbSel=Array.from(document.querySelectorAll('.kbchk:checked')).map(x=>x.value);
+  const limits={};
+  document.querySelectorAll('#limRows .limrow').forEach(r=>{
+    const e=r.querySelector('.lim-ext').value.trim().toLowerCase().replace(/^\./,'');
+    const mb=+r.querySelector('.lim-mb').value;
+    if(e&&mb>=1)limits[e]=Math.min(100,mb);
+  });
+  const devices=$('aDevices').value.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean);
   return {
     kb_whitelist:kbSel,
     ok_ext:Array.from(new Set(docSel.concat(extra))),
@@ -238,6 +313,9 @@ function collect(){
     img_max:Math.min(20,Math.max(1,+$('aImgMax').value||5)),
     media_ext:media,
     maxmb:Math.min(100,Math.max(1,+$('aMax').value||20)),
+    limits:limits,
+    access_mode:$('aAccess').value,
+    allowed_devices:Array.from(new Set(devices)),
     recall:$('aRecall').value,
     topk:+$('aTopk').value||10,
     model:$('aModel').value.trim()||'glm-4.6',
