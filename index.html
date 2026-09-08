@@ -89,13 +89,31 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .chk{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .chk label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--tx2);cursor:pointer}
 .chk input{width:auto}
+
+/* 搜索联想下拉 */
+.sbar{position:relative;flex:1}
+.sbar input{width:100%}
+.sug{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:40;display:none;max-height:280px;overflow-y:auto}
+.sug.on{display:block}
+.sug>div{padding:7px 12px;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center;color:var(--tx)}
+.sug>div:hover,.sug>div.act{background:var(--main-bg)}
+.sug .s-tag{font-size:11px;color:var(--tx3);margin-left:auto;flex:none}
+.sug .s-hl{color:var(--main);font-weight:600}
+/* 收藏星标 */
+.star{border:none;background:none;font-size:17px;line-height:1;cursor:pointer;padding:2px 3px;color:#d9a400;flex:none}
+.star:hover{transform:scale(1.15)}
+.favbar{display:flex;gap:6px;align-items:center;padding:7px 20px;background:#fffdf5;border-bottom:1px solid #f3e6b8;font-size:12px;color:var(--tx2);flex-wrap:wrap}
+.favbar .fv{border:1px solid #eadfae;background:#fffef8;border-radius:14px;padding:2px 10px;cursor:pointer;font-size:12px;color:var(--tx)}
+.favbar .fv:hover{border-color:var(--main);color:var(--main)}
+.favbar .fv-x{color:var(--tx3);margin-left:4px}
+.favbar .fv-x:hover{color:var(--err)}
 </style>
 </head>
 <body data-page-node-id="9jljvZvX2QEgjmX4DsvOHJ">
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260907k</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908a</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -117,7 +135,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
   <main data-page-node-id="lk68A47b8jSLFFJ2qNjPqP">
     <div class="searchbar" data-page-node-id="8lbqgVPRkj1JUBhM0CGper">
-      <input id="q" placeholder="输入问题或关键词，回车检索" onkeydown="if(event.key==='Enter')doSearch()" data-page-node-id="gfl38WlijGBwKeqZUxMfUi">
+      <span class="sbar"><input id="q" placeholder="输入问题或关键词，回车检索" onkeydown="sugKey(event)" oninput="sugInput()" data-page-node-id="gfl38WlijGBwKeqZUxMfUi"><div class="sug" id="sug"></div></span>
       <select id="recall" data-page-node-id="wIz500F7I8XDAC6e7t1pjE">
         <option value="keyword" data-page-node-id="6VB0IwBLlfw3qr4Tikx6oW">关键词检索</option>
         <option value="mixed" data-page-node-id="UkVfxRawGAV0G7HYLEWQCE">混合检索</option>
@@ -128,9 +146,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
         <option value="10" selected data-page-node-id="iwEGVG9SThChywlAzSA3Hk">10 条</option>
         <option value="20" data-page-node-id="MwzsbIAMIbfUECD0s204KY">20 条</option>
       </select>
+      <button onclick="showFavs()" title="查看我收藏的话术">⭐ 收藏</button>
       <button class="pri" onclick="doSearch()" id="btn" data-page-node-id="KfVtuOmw2TIFyv8geIjGMr">检索</button>
     </div>
     <div class="scope" id="scope" style="padding:8px 20px;background:#fff;border-bottom:1px solid var(--line)" data-page-node-id="qo2U5KJImzhZJd2QCg2iL8"></div>
+    <div class="favbar" id="favbar" style="display:none"></div>
     <div class="list" id="list" data-page-node-id="GPh9etoWWErOyI49DWYnD6">
       <div class="empty" data-page-node-id="0qqVw3OJNvxSe4Ls38MDhj">在右侧选择知识库，然后输入关键词开始检索</div>
     </div>
@@ -586,6 +606,115 @@ async function regDevice(){
     }
   }catch(e){}
 }
+// ============ 收藏置顶：星标常用地文档，检索时自动排最前 ============
+const FAV_LS='kb_favs';
+function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_LS)||'[]');}catch(e){return[];}}
+function saveFavs(f){try{localStorage.setItem(FAV_LS,JSON.stringify(f.slice(0,200)));}catch(e){}}
+function favKey(u,t){return (u||'')+'|'+(t||'');}
+function isFav(u,t){return getFavs().some(f=>f.k===favKey(u,t));}
+let LAST_RES=null; // 最近一次检索结果，点星标后重排实现即时置顶
+function toggleFav(el){
+  const u=el.getAttribute('data-u')||'',t=el.getAttribute('data-t')||'',kb=el.getAttribute('data-k')||'';
+  let f=getFavs();
+  const k=favKey(u,t);
+  if(f.some(x=>x.k===k)){f=f.filter(x=>x.k!==k);el.textContent='☆';el.style.color='#ccc';}
+  else{f.unshift({k:k,u:u,t:t,kb:kb,tm:Date.now()});el.textContent='★';el.style.color='#d9a400';}
+  saveFavs(f);renderFavbar();
+  if(LAST_RES)renderResults(LAST_RES.data,LAST_RES.q); // 重新排序：收藏的排最前
+}
+function renderFavbar(){
+  const f=getFavs(),bar=$('favbar');
+  if(!f.length){bar.style.display='none';return;}
+  bar.style.display='flex';
+  bar.innerHTML='<span style="flex:none">⭐ 常用：</span>'
+    +f.slice(0,12).map(x=>'<span class="fv" onclick="openFav(this)" data-u="'+esc(x.u)+'" data-t="'+esc(x.t)+'" title="点击查看全文">'+esc((x.t||'未命名').slice(0,18))+'<span class="fv-x" onclick="event.stopPropagation();delFav(this)" data-k="'+esc(x.k)+'">×</span></span>').join('')
+    +(f.length>12?'<span style="color:var(--tx3)">等 '+f.length+' 条</span>':'');
+}
+function delFav(el){
+  const k=el.getAttribute('data-k');
+  saveFavs(getFavs().filter(x=>x.k!==k));
+  renderFavbar();
+  if(LAST_RES)renderResults(LAST_RES.data,LAST_RES.q);
+}
+function openFav(el){
+  if(!el.getAttribute('data-u')){alert('该收藏没有可打开的原文链接');return;}
+  viewFull(el);
+}
+function showFavs(){
+  const f=getFavs();
+  if(!f.length){$('list').innerHTML='<div class="empty">还没有收藏。检索结果右侧的 ☆ 点一下变 ★ 就收藏了，下次检索自动置顶。</div>';return;}
+  const h='<div style="font-size:13px;font-weight:600;margin-bottom:10px">⭐ 我的收藏（'+f.length+'）</div>'
+    +f.map(x=>'<div class="card"><div class="c-h"><span class="c-doc">'+esc(x.t||'未命名文档')+'</span>'
+      +(x.kb?'<span class="c-kb">'+esc(x.kb)+'</span>':'')
+      +'<span class="c-sc"><span class="star" style="color:#d9a400" onclick="delFav(this);this.closest(\'.card\').remove()" data-k="'+esc(x.k)+'" title="取消收藏">★</span></span></div>'
+      +'<div class="c-f">'+(x.u?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(x.u)+'" data-t="'+esc(x.t)+'" data-p="0" style="font-weight:600">📄 查看全文</a>':'<span style="font-size:12px;color:var(--tx3)">无原文链接</span>')+'</div></div>').join('');
+  $('list').innerHTML=h;
+  window.scrollTo&&0;
+}
+
+// ============ 搜索联想：历史搜索词 + 收藏文档名，输入即提示，键盘可选 ============
+let _sugList=[],_sugIdx=-1,_sugTimer=null;
+function _sugSource(){
+  let hist=[];
+  try{
+    const raw=JSON.parse(localStorage.getItem('kb_qstats')||'{}');
+    hist=Object.keys(raw).sort((a,b)=>(raw[b].n||0)-(raw[a].n||0)).slice(0,100)
+      .map(w=>({v:w,tag:'历史'}));
+  }catch(e){}
+  getFavs().forEach(f=>{if(f.t)hist.push({v:f.t,tag:'⭐收藏'});});
+  return hist;
+}
+function sugInput(){
+  clearTimeout(_sugTimer);
+  _sugTimer=setTimeout(()=>{
+    const q=$('q').value.trim().toLowerCase();
+    const box=$('sug');
+    if(!q){box.classList.remove('on');return;}
+    const seen={},cands=[];
+    for(const it of _sugSource()){
+      const w=it.v.toLowerCase();
+      if(w===q||!w.includes(q))continue;
+      if(seen[it.v])continue;seen[it.v]=1;
+      // 前缀命中的排前面
+      cands.push({v:it.v,tag:it.tag,pre:w.startsWith(q)?0:1});
+      if(cands.length>=10)break;
+    }
+    if(!cands.length){box.classList.remove('on');return;}
+    cands.sort((a,b)=>a.pre-b.pre);
+    _sugList=cands;_sugIdx=-1;
+    box.innerHTML=cands.map((c,i)=>{
+      const idx=c.v.toLowerCase().indexOf(q);
+      const html=esc(c.v.slice(0,idx))+'<span class="s-hl">'+esc(c.v.slice(idx,idx+q.length))+'</span>'+esc(c.v.slice(idx+q.length));
+      return '<div onmousedown="sugPick('+i+')" data-i="'+i+'">'+html+'<span class="s-tag">'+c.tag+'</span></div>';
+    }).join('');
+    box.classList.add('on');
+  },120);
+}
+function sugKey(e){
+  const box=$('sug');
+  if(box.classList.contains('on')&&_sugList.length){
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      _sugIdx=(_sugIdx+(e.key==='ArrowDown'?1:-1)+_sugList.length)%_sugList.length;
+      box.querySelectorAll(':scope>div').forEach((d,i)=>d.classList.toggle('act',i===_sugIdx));
+      const act=box.querySelector('div.act');if(act)act.scrollIntoView({block:'nearest'});
+      return;
+    }
+    if(e.key==='Enter'&&_sugIdx>=0){e.preventDefault();sugPick(_sugIdx);return;}
+  }
+  if(e.key==='Enter'){box.classList.remove('on');doSearch();}
+  if(e.key==='Escape')box.classList.remove('on');
+}
+function sugPick(i){
+  const c=_sugList[i];if(!c)return;
+  $('q').value=c.v;
+  $('sug').classList.remove('on');
+  doSearch();
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.sbar'))$('sug').classList.remove('on');
+});
+
 function hl(text,q){  const raw=String(text==null?'':text);
   // 1. 生成候选词：把查询串按分隔符拆开，再从每段里取出所有 >=2 字的连续子串
   const segs=q.split(/[\s,，。、？?！!]+/).filter(Boolean).slice(0,8);
@@ -622,6 +751,7 @@ function hl(text,q){  const raw=String(text==null?'':text);
 
 function renderResults(data,q){
   if(!data.length){$('list').innerHTML='<div class="empty">没有找到相关内容，换个关键词或试试「混合检索」</div>';return;}
+  LAST_RES={data:data,q:q}; // 记住本次结果，点星标后用它重排
   // 同一文档的多个片段命中只保留相关度最高的一条，标注命中片段数
   const seen={},list=[];
   for(const it of data){
@@ -630,17 +760,25 @@ function renderResults(data,q){
     if(seen[key]){seen[key].n++;continue;}
     seen[key]=it;it.n=1;list.push(it);
   }
+  // 收藏的文档自动置顶（稳定排序，同组内保持相关度顺序）
+  list.sort((a,b)=>{
+    const fa=isFav(a.metadata&&a.metadata.doc_url,a.metadata&&a.metadata.doc_name)?1:0;
+    const fb=isFav(b.metadata&&b.metadata.doc_url,b.metadata&&b.metadata.doc_name)?1:0;
+    return fb-fa;
+  });
   let h='';
   list.forEach((it,i)=>{
     const m=it.metadata||{};
     const url=m.doc_url||'';
+    const fav=isFav(url,m.doc_name);
     const isPdf=/\.pdf$/i.test(String(m.doc_name||''))||m.doc_type==='pdf';
     h+='<div class="card">'
       +'<div class="c-h"><span class="c-idx">'+(i+1)+'</span>'
       +'<span class="c-doc">'+esc(m.doc_name||'未命名文档')+'</span>'
       +'<span class="c-kb">'+esc(kbName(m.knowledge_id))+'</span>'
       +(it.n>1?'<span class="c-kb" style="color:var(--main)">命中 '+it.n+' 处</span>':'')
-      +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span></div>'
+      +'<span class="c-sc">相关度 '+(it.score==null?'-':it.score.toFixed(3))+'</span>'
+      +'<span class="star" title="收藏后检索自动置顶" onclick="toggleFav(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" data-k="'+esc(kbName(m.knowledge_id))+'" style="color:'+(fav?'#d9a400':'#ccc')+'">'+(fav?'★':'☆')+'</span></div>'
       +'<div class="c-tx">'+hl(it.text||'',q)+'</div>'
       +(url?'<div class="c-prev" data-u="'+esc(url)+'" data-n="'+esc(m.doc_name||'')+'" data-p="'+(m.page_index!=null?m.page_index:0)+'"><div class="tip" style="padding:6px 2px">正在加载原文预览…</div></div>':'')
       +'<div class="c-f">'+(url?'<a href="javascript:void(0)" onclick="viewFull(this)" data-u="'+esc(url)+'" data-t="'+esc(m.doc_name||'')+'" data-p="'+(m.page_index!=null?m.page_index:0)+'" style="font-weight:600">📄 查看全文</a> <a href="'+esc(url)+'" target="_blank" rel="noopener">新窗口打开</a>':'<span style="font-size:12px;color:var(--tx3)">该文档无可跳转链接</span>')
@@ -1123,6 +1261,7 @@ $('topk').onchange=()=>{S.topk=+$('topk').value;saveCfg();};
 
 loadCfg();
 $('devIdBox').textContent=DEV_ID;
+renderFavbar(); // 收藏快捷栏
 // 秒开：先用本地缓存渲染知识库树和上次搜索，网络回来再静默刷新
 if(S.libs&&S.libs.length){renderTree();updScope();setStatus(true,'缓存模式 · 正在同步…');}
 $('recall').value=S.recall;$('topk').value=String(S.topk);
