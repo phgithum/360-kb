@@ -178,7 +178,7 @@ header{height:52px;background:var(--panel);border-bottom:1px solid var(--line);d
     </div>
     <div class="row">
       <label>AI 归类模型</label>
-      <input id="aModel" style="width:220px" value="glm-4.6">
+      <input id="aModel" style="width:220px" value="glm-4-flash">
       <div class="tip">用于检索台左侧的「AI 归类」。若报模型不存在，改成 glm-4-flash。</div>
     </div>
   </div>
@@ -287,7 +287,7 @@ const DEF={
   media_ext:['mp4','mov','avi','mkv','webm','flv','wmv','m4v','mp3','wav','m4a','gif','bmp','svg','tif','tiff'],
   maxmb:20,
   limits:{md:5,txt:5,csv:10,doc:20,docx:20,xls:20,xlsx:20,pdf:20,ppt:50,pptx:50},
-  model:'glm-4.6',
+  model:'glm-4-flash',
   ktype:'1',
   ssize:300,
   pimg:false,
@@ -396,7 +396,7 @@ function collect(){
     stats_t2:$('aStatTok').value.trim().slice(16),
     recall:$('aRecall').value,
     topk:+$('aTopk').value||10,
-    model:$('aModel').value.trim()||'glm-4.6',
+    model:$('aModel').value.trim()||'glm-4-flash',
     ktype:$('aKtype').value,
     ssize:Math.min(1000,Math.max(50,+$('aSsize').value||300)),
     pimg:$('aPimg').checked,
