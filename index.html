@@ -130,7 +130,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908i</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908k</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -354,7 +354,7 @@ async function viewFull(el){
   $('mFull').classList.add('on');
   const body=$('fullBody');
   $('docFind').value='';
-  body.innerHTML='<div class="tip" style="padding:16px">加载中…</div>';
+  body.innerHTML='<div class="tip" style="padding:16px">加载中…（首次下载会存到本机，下次秒开）</div>';
   try{
     if(/\.pdf$/i.test(t)){
       await loadPdfJs();
@@ -611,6 +611,7 @@ function renderBrowse(){
       +'<span class="ba" onclick="moveDocUI('+i+')">移动</span></div>';
   });
   list.innerHTML=h;
+  prefetchBrowse(BROWSE_DOCS);
 }
 function findUrl(name){
   return (S.docIndex||[]).find(x=>x.name===name&&x.url);
@@ -1081,6 +1082,7 @@ function renderResults(data,q,opts){
   });
   $('list').innerHTML=h;
   document.querySelectorAll('.c-prev').forEach(renderPreview);
+  prefetchResults(data);
 }
 
 // ============ 原文内嵌预览：pdf.js 渲染 PDF / mammoth 转_docx / 直接读文本 ============
@@ -1115,6 +1117,31 @@ function loadMammoth(){
   return _mammothP;
 }
 const _docCache={};
+// 下载链路：①直连优先（限时 4 秒）→ 失败走代理兜底；下载成功后存进浏览器缓存，第二次秒开
+const _DL_PROXIES=[
+  u=>u,
+  u=>'https://corsproxy.io/?'+encodeURIComponent(u),
+  u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u)
+];
+async function dlBuf(url){
+  let err=null;
+  for(let i=0;i<_DL_PROXIES.length;i++){
+    const ctl=new AbortController();
+    const timer=(i===0)?setTimeout(()=>ctl.abort(),4000):null; // 直连 4 秒连不上就换代理
+    try{
+      const r=await fetch(_DL_PROXIES[i](url),{signal:ctl.signal,cache:'no-store'});
+      if(timer)clearTimeout(timer);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const b=await r.arrayBuffer();
+      if(!b.byteLength)throw new Error('空响应');
+      return b;
+    }catch(e){
+      if(timer)clearTimeout(timer);
+      err=e;
+    }
+  }
+  throw new Error((err&&err.message)||'下载失败');
+}
 // 持久缓存：文件下过一次就存进浏览器 Cache Storage，重开页面/重启浏览器都秒开
 async function fileBuf(url){
   try{
@@ -1122,19 +1149,45 @@ async function fileBuf(url){
       const c=await caches.open('kb-files-v1');
       let hit=await c.match(url);
       if(!hit){
-        const resp=await fetch(url);
-        if(!resp.ok)throw new Error('HTTP '+resp.status);
-        await c.put(url,resp.clone());
-        hit=resp;
+        const buf=await dlBuf(url);
+        try{await c.put(url,new Response(buf.slice(0)));}catch(e){/* 存不了就只当次用 */}
+        return buf;
       }
       return await hit.arrayBuffer();
     }
   }catch(e){/* 缓存不可用就走普通下载 */}
-  return fetchDoc(url);
+  return dlBuf(url);
 }
-function fetchDoc(url){
-  if(!_docCache[url])_docCache[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();});
-  return _docCache[url];
+// 后台预取：结果/目录一出来就悄悄把文档提前下载进缓存，点预览时秒开
+const _prefetched=new Set();
+function prefetchUrls(pairs){
+  let c=0;
+  for(const [u,n] of pairs){
+    if(c>=6)break;
+    if(!u||_prefetched.has(u)||!/\.(pdf|docx|md|txt|csv)$/i.test(n||''))continue;
+    _prefetched.add(u);c++;
+    fileBuf(u).catch(()=>{_prefetched.delete(u);}); // 失败允许下次重试
+  }
+}
+function prefetchResults(data){
+  try{
+    const seen=new Set(),pairs=[];
+    data.forEach(it=>{
+      const m=it.metadata||{};
+      if(m.doc_url&&!seen.has(m.doc_url)){seen.add(m.doc_url);pairs.push([m.doc_url,m.doc_name]);}
+    });
+    setTimeout(()=>prefetchUrls(pairs),300);
+  }catch(e){}
+}
+function prefetchBrowse(names){
+  ensureUrls().then(()=>{
+    const pairs=[];
+    (names||[]).slice(0,8).forEach(n=>{
+      const hit=findUrl(n);
+      if(hit&&hit.url)pairs.push([hit.url,n]);
+    });
+    prefetchUrls(pairs);
+  }).catch(()=>{});
 }
 const _prevBoxH=300;
 function prevFooter(url,name,hit){
@@ -1149,6 +1202,7 @@ async function renderPreview(box){
   try{
     // 固定一屏高度，超出截断不滚动；底部「展开完整原文」看全部
     box.style.cssText='margin:8px 0;border:1px solid var(--line);border-radius:6px;height:'+_prevBoxH+'px;overflow:hidden;position:relative;background:#fff';
+    box.innerHTML='<div class="tip" style="padding:8px">加载中…（首次下载会存到本机，下次秒开）</div>';
     if(/\.pdf$/i.test(name)){
       await loadPdfJs();
       let doc=_docCache[url];
@@ -1156,6 +1210,18 @@ async function renderPreview(box){
       const wrap=document.createElement('div');
       wrap.style.cssText='display:flex;gap:8px;padding:8px;overflow-x:auto;align-items:flex-start';
       box.innerHTML='';
+      // ③ 文字优先：命中页文字版先秒出，缩略图在后台补渲染
+      try{
+        const p0=await doc.getPage(start);
+        const tc=await p0.getTextContent();
+        const txt=tc.items.map(x=>x.str||'').join(' ').replace(/\s+/g,' ').trim();
+        if(txt){
+          const tb=document.createElement('div');
+          tb.style.cssText='padding:6px 10px;font-size:12.5px;line-height:1.7;color:var(--tx2);border-bottom:1px dashed var(--line2);white-space:pre-wrap;word-break:break-word';
+          tb.innerHTML='<b style="color:var(--main)">第 '+start+' 页文字版</b>（图片渲染中，请稍候）<br>'+esc(txt.slice(0,800))+(txt.length>800?'…':'');
+          box.appendChild(tb);
+        }
+      }catch(e){}
       const start=Math.min(Math.max(1,hit0+1),doc.numPages);
       const end=Math.min(start+5,doc.numPages); // 命中页起连续6页缩略图
       const jobs=[];
