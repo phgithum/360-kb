@@ -614,6 +614,7 @@ try{
   if(localStorage.getItem('kb_admin_gate')==='1'||sessionStorage.getItem('kb_admin_gate')==='1'||(localStorage.getItem(LS)||'').includes('key')){$('gate').style.display='none';}
 }catch(e){}
 
+try{ $('gate').style.display='none'; }catch(e){} /* 废除智谱Key身份锁，统一用账户密码门禁 */
 CFG=(function(){try{return Object.assign({},DEF,JSON.parse(localStorage.getItem(ADMIN_LS)||'{}'));}catch(e){return Object.assign({},DEF);}})();
 fillForm();
 try{$('ghToken').value=localStorage.getItem(GH_LS)||'';$('pubTime').textContent=localStorage.getItem('kb_last_pub')?('上次发布：'+localStorage.getItem('kb_last_pub')):'';}catch(e){}
