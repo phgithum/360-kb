@@ -130,7 +130,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908h</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908i</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -157,7 +157,6 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
       <select id="recall" data-page-node-id="wIz500F7I8XDAC6e7t1pjE">
         <option value="keyword" data-page-node-id="6VB0IwBLlfw3qr4Tikx6oW">关键词检索</option>
         <option value="mixed" data-page-node-id="UkVfxRawGAV0G7HYLEWQCE">混合检索</option>
-        <option value="ai">AI 精检 · 按主题分</option>
         <option value="embedding" data-page-node-id="xtbVhXsnEWYHfEz0Ewi2Mx">语义检索</option>
       </select>
       <select id="topk" data-page-node-id="OWHVOG4YR009DW5o1xPnIf">
@@ -793,7 +792,6 @@ async function doSearch(){
   const ids=scopeIds();
   if(!ids.length){alert('没有选中任何知识库');return;}
   const b=$('btn');b.disabled=true;b.textContent='检索中';
-  if(S.recall==='ai')return aiSearch(q,ids,b); // AI 精检模式走独立流程
   // 搜过的词直接用缓存秒出（10 分钟内有效），同时后台刷新
   let cached=null;
   try{
@@ -823,67 +821,6 @@ async function doSearch(){
   }catch(e){
     if(!cached)$('list').innerHTML='<div class="empty" style="color:var(--err)">检索失败：'+esc(e.message)+'</div>';
   }finally{b.disabled=false;b.textContent='检索';}
-}
-
-// ============ AI 精检：混合检索捞全片段 → AI 读完按主题分组（一个文件里几个产品就拆几组）============
-async function aiSearch(q,ids,b){
-  $('list').innerHTML='<div class="empty">正在捞取片段…</div>';
-  try{
-    const d=await api('/knowledge/retrieve',{method:'POST',json:1,body:JSON.stringify({
-      query:q,knowledge_ids:ids,top_k:Math.max(30,S.topk),top_n:100,recall_method:'mixed'
-    })});
-    let data=d.data||[];
-    if(_selDocs)data=data.filter(it=>_selDocs.has(normName((it.metadata&&it.metadata.doc_name)||'')));
-    if(!data.length){$('list').innerHTML='<div class="empty">没有找到相关内容，换个关键词试试</div>';return;}
-    // 命中词缓存（AI 结果单独缓存，10 分钟内同词秒出）
-    let cached=null;
-    try{
-      const sc=JSON.parse(localStorage.getItem('kb_scache')||'{}');
-      const ck=ids.join(',')+'|ai|'+q.toLowerCase();
-      if(sc[ck]&&Date.now()-sc[ck].t<600000)cached=sc[ck].d;
-    }catch(e){}
-    if(cached){renderResults(cached,q,{keepAll:true});return;}
-    $('list').innerHTML='<div class="empty">AI 正在阅读 '+data.length+' 个片段并按主题分组…</div>';
-    const groups=await aiRefine(data,q);
-    data.forEach(it=>{it._aiT=null;it._aiSum=null;});
-    (groups||[]).forEach(g=>{
-      (g.i||[]).forEach(idx=>{const it=data[+idx];if(it){it._aiT=g.t||'相关内容';it._aiSum=g.a||'';}});
-    });
-    const matched=data.filter(it=>it._aiT);
-    if(!matched.length){
-      $('list').innerHTML='<div class="empty">AI 判断知识库里没有直接回答这个问题的内容。<br>可以换个关键词，或切回「混合检索」看原始命中。</div>';
-      return;
-    }
-    try{ // 缓存 AI 分组结果
-      const sc=JSON.parse(localStorage.getItem('kb_scache')||'{}');
-      const ck=ids.join(',')+'|ai|'+q.toLowerCase();
-      sc[ck]={t:Date.now(),d:matched};
-      const ks=Object.keys(sc);
-      if(ks.length>30)ks.sort((a,c)=>sc[a].t-sc[c].t).slice(0,ks.length-30).forEach(x=>delete sc[x]);
-      localStorage.setItem('kb_scache',JSON.stringify(sc));
-    }catch(e){}
-    renderResults(matched,q,{keepAll:true});
-  }catch(e){
-    $('list').innerHTML='<div class="empty" style="color:var(--err)">AI 精检失败：'+esc(e.message)+'<br>可切回「混合检索」继续查</div>';
-  }finally{b.disabled=false;b.textContent='检索';}
-}
-async function aiRefine(chunks,q){
-  const lines=chunks.map((it,i)=>{
-    const m=it.metadata||{};
-    return '#'+i+'【'+(m.doc_name||'')+'】'+String(it.text||'').replace(/\s+/g,' ').slice(0,200);
-  }).join('\n');
-  const body={model:'glm-4-flash',temperature:0.2,messages:[
-    {role:'system',content:'你是知识库精准检索助手。给定一个问题和若干编号的知识库片段（#0~#N，片段已被截断）。请：1.挑出和问题真正相关的片段编号；2.如果相关内容涉及多个主题（例如不同产品、不同方案、不同文档各说各的），必须按主题分开，一个主题一组；3.每个主题给不超过 25 字的一句话总结。只输出 JSON 数组：[{"t":"主题名","i":[片段编号],"a":"主题总结"}]，主题名要具体（如产品名/型号），不要笼统的"产品"。没有相关内容输出 []。不要输出任何其他文字。'},
-    {role:'user',content:'问题：'+q+'\n\n'+lines}
-  ]};
-  const r=await fetch(CHAT,{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json();
-  if(d.error)throw new Error(d.error.message||'模型调用失败');
-  let txt=(((d.choices||[])[0]||{}).message||{}).content||'';
-  txt=txt.replace(/```json/g,'').replace(/```/g,'').trim();
-  const s=txt.indexOf('['),e=txt.lastIndexOf(']');
-  if(s<0)return [];
-  return JSON.parse(txt.slice(s,e+1));
 }
 
 // 全平台搜索统计：把词条写到 stats 仓库（后台发布的 token，只对统计仓库有权限）
