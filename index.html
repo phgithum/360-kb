@@ -107,6 +107,9 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .favbar .fv:hover{border-color:var(--main);color:var(--main)}
 .favbar .fv-x{color:var(--tx3);margin-left:4px}
 .favbar .fv-x:hover{color:var(--err)}
+.grp-t .tw{flex:none;width:16px;text-align:center;cursor:pointer;color:var(--tx3);user-select:none}
+.grp-t .tw:hover{color:var(--main)}
+.grp-t .grp-n{flex:1}
 </style>
 </head>
 <body data-page-node-id="9jljvZvX2QEgjmX4DsvOHJ">
@@ -127,6 +130,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
       <span data-page-node-id="LfoxkDAl9GjOnP4u9v0YFn">检索范围</span>
       <button style="padding:2px 8px;font-size:11px" onclick="autoCat()" id="catBtn" data-page-node-id="EPOM7rtxcr688IBMxHGMEU">AI 归类</button>
     </div>
+    <div style="padding:8px 10px 4px"><input id="treeQ" placeholder="🔍 搜索知识库名" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px" oninput="renderTree()"></div>
     <div class="side-b" id="tree" data-page-node-id="TjtS0G1NZRTsruLJUHrkvW"></div>
     <div class="side-f" data-page-node-id="SskMDoPlknhTTaCKqVs3kp">
       <button style="width:100%" onclick="loadLibs()" data-page-node-id="t81tGq6mBlui0dmH82cEpn">刷新知识库</button>
@@ -212,6 +216,13 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
         点击选择，或把文件拖到这里<br data-page-node-id="wByzx1JRyfSfzCL60j6h3N">支持 md / txt / pdf / doc / docx / ppt / pptx / xls / xlsx / csv，单个不超过设置里的大小上限（默认 20MB）<br>图片支持 jpg / jpeg / png / webp，单张不超过 5MB；视频、音频会被自动拦截
       </div>
       <input type="file" id="uFile" multiple style="display:none" onchange="pickFiles(this.files)" data-page-node-id="0UhySwW18NqWBHz0JcrDFy">
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" onclick="document.getElementById('uDir').click()" style="font-size:13px;padding:9px 14px">📁 整个文件夹上传</button>
+        <button type="button" onclick="document.getElementById('uZip').click()" style="font-size:13px;padding:9px 14px">🗜️ 上传压缩包(.zip)</button>
+      </div>
+      <input type="file" id="uDir" webkitdirectory style="display:none" onchange="doFolder(this.files)">
+      <input type="file" id="uZip" accept=".zip" style="display:none" onchange="doZip(this.files[0])">
+      <div class="tip" style="margin-top:6px">文件夹：每个一级子文件夹自动建成一个同名知识库，文件分类归档；压缩包：自动解压，收入上方所选的知识库</div>
       <div class="files" id="uFiles" data-page-node-id="2KgDu1yFs7ygiBE1gvqK8Z"></div>
     </div>
     <div class="row" data-page-node-id="mnZeLmCaZlTyXXEWPT8KmQ">
@@ -227,6 +238,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <script>
 const BASE='https://open.bigmodel.cn/api/llm-application/open';
 const CHAT='https://open.bigmodel.cn/api/paas/v4/chat/completions';
@@ -454,7 +466,7 @@ async function loadLibs(silent){
       const d=await api('/knowledge?page='+page+'&size=50');
       const dd=d.data||{};total=dd.total||0;all=all.concat(dd.list||[]);page++;
     }while(all.length<total&&page<20);
-    let libs=all.map(k=>({id:String(k.id),name:k.name||'未命名',size:k.document_size||0}));
+    let libs=all.map(k=>({id:String(k.id),name:k.name||'未命名',size:k.document_size||0,emb:k.embedding_id||''}));
     if(KB_WHITELIST.length)libs=libs.filter(k=>KB_WHITELIST.includes(k.id));
     S.libs=libs;
     saveCfg();renderTree();
@@ -471,26 +483,36 @@ async function loadLibs(silent){
 function kbName(id){const k=S.libs.find(x=>x.id===String(id));return k?k.name:id;}
 
 function renderTree(){
-  const t=$('tree');let h='';
-  const allSel=S.sel==='ALL';
-  h+='<div class="grp-t'+(allSel?' sel':'')+'" onclick="setSel(\'ALL\')"><span class="grp-n">全部知识库</span><span class="badge">'+S.libs.length+'</span></div>';
+  const t=$('tree');const q=(($('treeQ')||{}).value||'').trim().toLowerCase();
+  const vis=k=>!q||k.name.toLowerCase().includes(q);
+  let h='';
+  const libs=S.libs.filter(vis);
+  h+='<div class="grp-t'+(S.sel==='ALL'?' sel':'')+'" onclick="setSel(\'ALL\')"><span class="grp-n">📂 全部知识库</span><span class="badge">'+libs.length+'</span></div>';
   if(S.cats&&Object.keys(S.cats).length){
     for(const c of Object.keys(S.cats)){
-      const ids=(S.cats[c]||[]).map(String);
-      h+='<div class="grp-t'+(S.sel==='C:'+c?' sel':'')+'" onclick="setSel(\'C:'+esc(c)+'\')"><span class="grp-n">'+esc(c)+'</span><span class="badge">'+ids.length+'</span></div>';
-      if(S.sel==='C:'+c)for(const id of ids){
-        const k=S.libs.find(x=>x.id===id)||{name:id,size:0};
-        h+='<div class="lib" onclick="setSel(\'K:'+id+'\')"><span>'+esc(k.name)+'</span><span class="badge">'+(k.size||0)+'</span></div>';
-      }
+      const items=(S.cats[c]||[]).map(String).map(id=>S.libs.find(k=>k.id===id)).filter(Boolean).filter(vis);
+      if(q&&!items.length)continue;
+      const open=q||(S.open&&S.open[c]);
+      h+='<div class="grp-t'+(S.sel==='C:'+c?' sel':'')+'">'
+        +'<span class="tw" onclick="twCat(\''+esc(c)+'\')">'+(open?'▾':'▸')+'</span>'
+        +'<span class="grp-n" onclick="setSel(\'C:'+esc(c)+'\')">'+esc(c)+'</span><span class="badge">'+items.length+'</span></div>';
+      if(open)for(const k of items)h+=libRow(k);
     }
-  }else{
-    for(const k of S.libs){
-      h+='<div class="lib'+(S.sel==='K:'+k.id?' sel':'')+'" onclick="setSel(\'K:'+k.id+'\')"><span>'+esc(k.name)+'</span><span class="badge">'+(k.size||0)+'</span></div>';
-    }
+  }
+  // 未归入库单独一组
+  const catd={};Object.keys(S.cats||{}).forEach(c=>(S.cats[c]||[]).forEach(id=>catd[String(id)]=1));
+  const rest=libs.filter(k=>!catd[k.id]);
+  if(rest.length){
+    h+='<div class="grp-t'+(S.sel==='C:未归类'?' sel':'')+'">'
+      +'<span class="tw" onclick="twCat(\'__rest\')">'+((S.open&&S.open.__rest)||q?'▾':'▸')+'</span>'
+      +'<span class="grp-n" onclick="setSel(\'C:未归类\')">未归类</span><span class="badge">'+rest.length+'</span></div>';
+    if((S.open&&S.open.__rest)||q)for(const k of rest)h+=libRow(k);
   }
   t.innerHTML=h;
 }
-
+function libRow(k){
+  return '<div class="lib'+(S.sel==='K:'+k.id?' sel':'')+'" onclick="setSel(\'K:'+k.id+'\')"><span>· '+esc(k.name)+'</span><span class="badge">'+(k.size||0)+'</span></div>'}
+function twCat(c){S.open=S.open||{};S.open[c]=!S.open[c];saveCfg();renderTree()}
 function setSel(v){S.sel=(S.sel===v&&v!=='ALL')?'ALL':v;saveCfg();renderTree();updScope();}
 
 function scopeIds(){
@@ -1203,6 +1225,116 @@ async function doUpload(){
   b.disabled=false;
   setTimeout(()=>loadLibs(true),3000);
   watchSlicing(kb);
+}
+
+// ============ 文件夹 / 压缩包 批量上传 ============
+function mkL(){
+  $('uLog').innerHTML='<div class="log" id="lg"></div>';
+  return (m,c)=>{const d=document.createElement('div');if(c)d.className=c;d.textContent=m;
+    const g=document.getElementById('lg');g.appendChild(d);g.scrollTop=g.scrollHeight}};
+function validateOne(f){
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  if(f.name.startsWith('.')||f.name.startsWith('__MACOSX')||/(^|\/)\._/.test(f.name))return '隐藏文件';
+  if(IMG_EXT.includes(ext))return (f.size>IMG_MAX_MB*1024*1024)?'图片超 '+IMG_MAX_MB+'MB':null;
+  if(!OK_EXT.includes(ext))return MEDIA_EXT.includes(ext)?'视频/音频':'不支持 '+ext;
+  const lim=limitFor(ext);
+  return (f.size>lim*1024*1024)?(ext+' 超 '+lim+'MB'):null;
+}
+async function ensureKB(name){
+  const ex=S.libs.find(k=>k.name===name);
+  if(ex)return ex.id;
+  const emb=(S.libs[0]&&S.libs[0].emb)||'embedding-2';
+  const d=await api('/knowledge',{method:'POST',json:1,body:JSON.stringify({name:name,embedding_id:emb,description:'文件夹上传自动创建'})});
+  const id=String((d.data&&(d.data.id||d.data.knowledge_id))||d.id||'');
+  if(!id)throw new Error('创建知识库「'+name+'」失败');
+  S.libs.push({id:id,name:name,size:0,emb:emb});
+  return id;
+}
+async function uploadOne(f,kb,L){
+  try{
+    let upFile=f;
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    const isImg=IMG_EXT.includes(ext);
+    if(isImg){L('  图片转 PDF…');upFile=await imgToPdf(f);}
+    const fd=new FormData();
+    fd.append('files',upFile,isImg?(f.name.replace(/\.[^.]+$/,'')+'.pdf'):f.name);
+    if(!isImg){fd.append('knowledge_type',CFG.ktype);fd.append('sentence_size',String(CFG.ssize||300));}
+    fd.append('parse_image',isImg?'true':(CFG.pimg?'true':'false'));
+    const r=await fetch(BASE+'/document/upload_document/'+kb,{method:'POST',headers:{'Authorization':'Bearer '+S.key},body:fd});
+    const d=await r.json();
+    if(d.code!==200&&d.code!==0)throw new Error(d.message||('HTTP '+r.status));
+    const ok=(d.data&&d.data.successInfos)||[],bad=(d.data&&d.data.failedInfos)||[];
+    ok.forEach(o=>L('  ✅ '+o.fileName,'ok'));
+    bad.forEach(o=>L('  ❌ '+o.fileName+' — '+o.failReason,'er'));
+    return bad.length===0;
+  }catch(e){L('  ❌ 出错：'+e.message,'er');return false}
+}
+async function doFolder(fs){
+  const pw=prompt('请输入上传密码：');
+  if(pw===null)return;
+  if(pw!==(CFG.upload_pass||'12345678')){alert('上传密码错误');return;}
+  const all=Array.from(fs);
+  if(!all.length)return;
+  const groups={};let skipped=0;
+  for(const f of all){
+    const rel=(f.webkitRelativePath||f.name);
+    const top=rel.split('/')[0]||'文件夹上传';
+    const bad=validateOne(f);
+    if(bad){skipped++;continue}
+    (groups[top]=groups[top]||[]).push(f);
+  }
+  if(!Object.keys(groups).length){alert('文件夹里没有可收入知识库的文档');return;}
+  $('mask').classList.add('on');$('mUp').classList.add('on');
+  const L=mkL();
+  L('📁 文件夹上传：'+Object.keys(groups).length+' 个分组，共 '+all.reduce((n,g)=>n+groups[g].length,0)+' 个文件（已拦截 '+skipped+' 个不合规）','wn');
+  const b=$('uBtn');b.disabled=true;
+  const doneKbs=[];
+  try{
+    for(const top of Object.keys(groups)){
+      L('▶ 分组「'+top+'」');
+      let kb;
+      try{kb=await ensureKB(top);L('  知识库：'+top+(S.libs.find(k=>k.id===kb&&k.size===0&&k._new)?'（新建）':'（已有）'));}
+      catch(e){L('  '+e.message,'er');continue;}
+      for(const f of groups[top]){L('  上传：'+f.name);await uploadOne(f,kb,L);}
+      doneKbs.push(kb);
+    }
+    L('全部提交完成，智谱正在切片建立索引…','wn');
+  }catch(e){L('出错：'+e.message,'er');}
+  b.disabled=false;
+  setTimeout(()=>loadLibs(true),3000);
+  doneKbs.forEach(k=>watchSlicing(k));
+}
+async function doZip(file){
+  if(!file)return;
+  const pw=prompt('请输入上传密码：');
+  if(pw===null)return;
+  if(pw!==(CFG.upload_pass||'12345678')){alert('上传密码错误');return;}
+  if(typeof fflate==='undefined'){alert('解压组件加载失败（网络问题），请刷新重试');return;}
+  $('mask').classList.add('on');$('mUp').classList.add('on');
+  const L=mkL();
+  const b=$('uBtn');b.disabled=true;
+  try{
+    L('🗜️ 解压：'+file.name+'…','wn');
+    const u8=new Uint8Array(await file.arrayBuffer());
+    const entries=fflate.unzipSync(u8);
+    const kb=$('uKb').value;
+    let n=0,skip=0;
+    for(const path of Object.keys(entries)){
+      if(path.endsWith('/'))continue;
+      const base=path.split('/').pop();
+      const data=entries[path];
+      const bad=validateOne({name:base,size:data.length});
+      if(bad){skip++;L('  已拦截 '+base+'（'+bad+'）','wn');continue;}
+      const f=new File([data],base);
+      L('  上传：'+path);
+      await uploadOne(f,kb,L);
+      n++;
+    }
+    L('压缩包处理完成：收入 '+n+' 个文件，拦截 '+skip+' 个。开始切片索引…','wn');
+  }catch(e){L('出错：'+e.message,'er');}
+  b.disabled=false;
+  setTimeout(()=>loadLibs(true),3000);
+  watchSlicing($('uKb').value);
 }
 
 // ============ 切片进度监控：上传后自动轮询文档处理状态 ============
