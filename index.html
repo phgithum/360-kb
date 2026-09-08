@@ -53,6 +53,21 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .scope{font-size:12px;color:var(--tx3);white-space:nowrap}
 .list{flex:1;overflow-y:auto;padding:16px 20px 40px}
 .empty{text-align:center;color:var(--tx3);padding:70px 20px;font-size:13px}
+.bh{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line2);font-size:14px}
+.bh span{color:var(--tx3);font-size:12px}
+.bh button{margin-left:auto;font-size:12px;padding:4px 10px}
+.brow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line2);font-size:13px}
+.brow:hover{background:#fafbfc}
+.bn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba{color:var(--main);cursor:pointer;font-size:12px;flex:none;padding:2px 6px}
+#mmodal{position:fixed;inset:0;display:none;z-index:99;align-items:center;justify-content:center}
+.mm-bg{position:absolute;inset:0;background:rgba(15,20,30,.4)}
+.mv{position:relative;background:#fff;border-radius:10px;padding:16px;width:min(420px,90vw);max-height:72vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+.mv-t{font-weight:600;font-size:14px}
+.mv-l{overflow:auto;margin:10px 0;flex:1}
+.mv-i{padding:8px 10px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px;cursor:pointer;font-size:13px}
+.mv-i:hover{border-color:var(--main);color:var(--main)}
+.mv-x{text-align:center;color:var(--tx3);cursor:pointer;padding:4px;font-size:12px}
 
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 15px;margin-bottom:10px}
 .card:hover{border-color:#cfd6de}
@@ -113,7 +128,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908d</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908e</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -517,7 +532,8 @@ function _treeLevel(obj,depth,prefix){
     const cnt=treeNodeCount(node);
     TM[id]={node:node,label:label};
     const tw=isObj?'<span class="tw" onclick="event.stopPropagation();twToggle(\''+id+'\')">'+(open?'▾':'▸')+'</span>':'<span class="tw"></span>';
-    h+='<div class="grp-t'+(S.sel==='T:'+id?' sel':'')+'" style="padding-left:'+(6+depth*13)+'px" title="'+esc(label)+'" onclick="setSel(\'T:'+id+'\')">'+tw+'<span class="grp-n">'+esc(label)+'</span><span class="badge">'+cnt+'</span></div>';
+    h+='<div class="grp-t'+(S.sel==='T:'+id?' sel':'')+'" style="padding-left:'+(6+depth*13)+'px" title="'+esc(label)+'" onclick="setSel(\'T:'+id+'\')">'+tw+'<span class="grp-n">'+esc(label)+'</span><span class="badge">'+cnt+'</span>'
+      +'<span class="tw" title="重命名" onclick="nodeRename(\''+id+'\',event)">✎</span><span class="tw" title="删除目录" onclick="nodeDel(\''+id+'\',event)">🗑</span></div>';
     if(!open)return;
     if(isObj){h+=_treeLevel(node,depth+1,id);}
     else{
@@ -537,7 +553,119 @@ function twToggle(id){
   saveCfg();renderTree();
 }
 
-function setSel(v){S.sel=(S.sel===v&&v!=='ALL')?'ALL':v;saveCfg();renderTree();updScope();}
+function setSel(v){S.sel=(S.sel===v&&v!=='ALL')?'ALL':v;saveCfg();renderTree();updScope();if(!($('q').value||'').trim())renderBrowse();}
+
+// ============ 目录浏览 + 手动管理 ============
+let BROWSE_DOCS=[];
+function findNode(id){
+  const parts=id.split('-');
+  let obj=S.tree,parent=null,key=null;
+  for(let i=0;i<parts.length;i++){
+    const keys=Object.keys(obj);
+    if(!keys[+parts[i]])return {};
+    key=keys[+parts[i]];parent=obj;
+    if(i<parts.length-1&&obj[key]&&!Array.isArray(obj[key])&&typeof obj[key]==='object')obj=obj[key];
+  }
+  return {parent:parent,key:key,label:key,node:parent?parent[key]:null};
+}
+function walkTree(obj,prefix,out){
+  Object.keys(obj).forEach((label,i)=>{
+    const id=(prefix?prefix+'-':'')+i;
+    out.push({id:id,label:label});
+    const n=obj[label];
+    if(n&&!Array.isArray(n)&&typeof n==='object')walkTree(n,id,out);
+  });
+  return out;
+}
+function removeDocEverywhere(name){
+  (function rm(o){
+    for(const k in o){
+      const v=o[k];
+      if(Array.isArray(v)){o[k]=v.filter(d=>normName(d)!==name);}
+      else if(v&&typeof v==='object')rm(v);
+    }
+  })(S.tree);
+}
+function renderBrowse(){
+  const list=$('list');
+  if(S.sel==='ALL'||S.sel.startsWith('K:')){list.innerHTML='<div class="empty">在左侧选择目录可浏览文件，或输入关键词开始检索</div>';return;}
+  const e=TM[S.sel.slice(2)];
+  if(!e){list.innerHTML='<div class="empty">该目录已不存在</div>';return;}
+  BROWSE_DOCS=[];
+  if(S.sel.startsWith('D:'))BROWSE_DOCS=[e.name];
+  else (function collect(n){
+    if(Array.isArray(n)){n.forEach(d=>BROWSE_DOCS.push(normName(d)));return;}
+    for(const k in n)collect(n[k]);
+  })(e.node);
+  let h='<div class="bh"><b>'+esc(e.label||'文档')+'</b><span>'+BROWSE_DOCS.length+' 个文档 · 点「移动」可调整归属</span>'
+    +(S.sel.startsWith('T:')?'<button onclick="nodeAddSub(\''+S.sel.slice(2)+'\')">＋ 子类</button>':'')
+    +'</div>';
+  if(!BROWSE_DOCS.length)h+='<div class="empty">这个目录还没有文档，点「AI 目录树」重新生成，或从其他目录移动文件过来</div>';
+  BROWSE_DOCS.forEach((d,i)=>{
+    h+='<div class="brow"><span class="bn" title="'+esc(d)+'">📄 '+esc(d)+'</span><span class="ba" onclick="moveDocUI('+i+')">移动</span></div>';
+  });
+  list.innerHTML=h;
+}
+function moveDocUI(i){
+  const name=BROWSE_DOCS[i];if(!name)return;
+  const cats=walkTree(S.tree,'',[]);
+  let h='<div class="mv"><div class="mv-t">把「'+esc(name)+'」移动到：</div><div class="mv-l">';
+  cats.forEach(c=>{h+='<div class="mv-i" onclick="moveDocDo(\''+c.id+'\','+i+')">'+esc(c.label)+'</div>';});
+  h+='</div><div class="mv-x" onclick="closeModal()">取消</div></div>';
+  openModal(h);
+}
+function moveDocDo(tid,i){
+  const name=BROWSE_DOCS[i];if(!name)return;
+  removeDocEverywhere(name);
+  const tgt=findNode(tid).node;
+  let done=false;
+  if(Array.isArray(tgt)){if(!tgt.includes(name))tgt.push(name);done=true;}
+  else if(tgt&&typeof tgt==='object'){
+    const ak=Object.keys(tgt).find(k=>Array.isArray(tgt[k]));
+    if(ak){if(!tgt[ak].includes(name))tgt[ak].push(name);done=true;}
+  }
+  if(!done){
+    if(!S.tree['未归类']||!Array.isArray(S.tree['未归类']))S.tree['未归类']=[];
+    if(!S.tree['未归类'].includes(name))S.tree['未归类'].push(name);
+  }
+  saveCfg();closeModal();renderTree();updScope();renderBrowse();
+}
+function nodeRename(id,ev){
+  ev&&ev.stopPropagation();
+  const f=findNode(id);if(!f.node)return;
+  const nn=prompt('修改类目名称：',f.label||'');
+  if(!nn||nn.trim()===f.label)return;
+  const v=f.parent[f.key];delete f.parent[f.key];f.parent[nn.trim()]=v;
+  saveCfg();renderTree();updScope();renderBrowse();
+}
+function nodeDel(id,ev){
+  ev&&ev.stopPropagation();
+  const f=findNode(id);if(!f.node)return;
+  if(!confirm('删除目录「'+(f.label||'')+'」？里面的文档会移到「未归类」。'))return;
+  const docs=Array.from(treeDocs(f.node));
+  delete f.parent[f.key];
+  if(!S.tree['未归类']||!Array.isArray(S.tree['未归类']))S.tree['未归类']=[];
+  docs.forEach(d=>{if(!S.tree['未归类'].includes(d))S.tree['未归类'].push(d);});
+  if(S.sel==='T:'+id){S.sel='ALL';_selDocs=null;}
+  saveCfg();renderTree();updScope();renderBrowse();
+}
+function nodeAddSub(id){
+  const f=findNode(id);if(!f.node)return;
+  const nn=prompt('新子类名称：','');
+  if(!nn||!nn.trim())return;
+  const k=nn.trim();
+  if(Array.isArray(f.node))f.parent[f.key]={'文档':f.node};
+  findNode(id).node[k]=[];
+  S.tOpen[id]=true;
+  saveCfg();renderTree();updScope();renderBrowse();
+}
+function openModal(html){
+  let m=$('mmodal');
+  if(!m){m=document.createElement('div');m.id='mmodal';document.body.appendChild(m);}
+  m.innerHTML='<div class="mm-bg" onclick="closeModal()"></div>'+html;
+  m.style.display='flex';
+}
+function closeModal(){const m=$('mmodal');if(m)m.style.display='none';}
 
 function scopeIds(){
   if(S.sel==='ALL')return S.libs.map(k=>k.id);
@@ -1055,7 +1183,7 @@ async function autoTree(){
     if(rest.length)clean['未归类']=rest;
     S.tree=clean;S.cats=null;
     Object.keys(clean).forEach((c,i)=>{S.tOpen[String(i)]=true;}); // 一级类目默认展开
-    saveCfg();renderTree();updScope();
+    saveCfg();renderTree();updScope();renderBrowse();
   }catch(err){
     alert('目录树生成失败：'+err.message);
   }finally{b.disabled=false;b.textContent='AI 目录树';}
@@ -1383,7 +1511,7 @@ $('devIdBox').textContent=DEV_ID;
 if(!$('sKey').value.trim())$('sKey').value=S.key; // 内置key，打开即用
 renderFavbar(); // 收藏快捷栏
 // 秒开：先用本地缓存渲染知识库树和上次搜索，网络回来再静默刷新
-if(S.libs&&S.libs.length){renderTree();updScope();setStatus(true,'缓存模式 · 正在同步…');}
+if(S.libs&&S.libs.length){renderTree();updScope();renderBrowse();setStatus(true,'缓存模式 · 正在同步…');}
 $('recall').value=S.recall;$('topk').value=String(S.topk);
 // 页面打开就后台预载 pdf.js / mammoth，搜索时预览零等待
 loadPdfJs().catch(()=>{});
