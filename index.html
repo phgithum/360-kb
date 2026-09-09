@@ -130,7 +130,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908k</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260908m</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -328,15 +328,18 @@ function showDenied(){
 const $=id=>document.getElementById(id);
 
 // ============ 平台配置（后台发布 → GitHub 仓库 config.json → 前台每次打开拉取）============
-const REPO_CFG='https://raw.githubusercontent.com/phgithum/360-kb/main/config.json';
 async function pullRemote(){
-  try{
-    const r=await fetch(REPO_CFG+'?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok)return;
-    const d=await r.json();
-    if(d&&d.config)Object.assign(CFG,d.config);
-    applyCFG();
-  }catch(e){/* 拉取失败就用本地/默认配置 */}
+  const urls=['config.json?t='+Date.now(),
+    'https://raw.githubusercontent.com/phgithum/360-kb/main/config.json?t='+Date.now(),
+    'https://cdn.jsdelivr.net/gh/phgithum/360-kb@main/config.json'];
+  for(const u of urls){
+    try{
+      const r=await fetch(u,{cache:'no-store'});
+      if(!r.ok)continue;
+      const d=await r.json();
+      if(d&&d.config){Object.assign(CFG,d.config);applyCFG();return;}
+    }catch(e){/* 换下一个源 */}
+  }
 }
 
 function loadCfg(){
@@ -454,14 +457,31 @@ async function imgToPdf(f){
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+const _API_PROXIES=[u=>u,u=>'https://corsproxy.io/?url='+encodeURIComponent(u),u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u)];
+async function apiOnce(url,method,h,body){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
+  try{
+    const r=await fetch(url,{method:method,headers:h,body:body,signal:ctl.signal});
+    clearTimeout(tm);
+    let d;try{d=await r.json();}catch(e){throw new Error('返回解析失败 HTTP '+r.status);}
+    if(d.code!==200&&d.code!==0){throw new Error(d.message||('接口错误 '+d.code));}
+    return d;
+  }catch(e){clearTimeout(tm);throw e;}
+}
 async function api(path,opt={}){
   if(!S.key)throw new Error('请先在设置里填写智谱 API Key');
   const h={'Authorization':'Bearer '+S.key};
   if(opt.json)h['Content-Type']='application/json';
-  const r=await fetch(BASE+path,{method:opt.method||'GET',headers:h,body:opt.body});
-  let d;try{d=await r.json();}catch(e){throw new Error('返回解析失败 HTTP '+r.status);}
-  if(d.code!==200&&d.code!==0){throw new Error(d.message||('接口错误 '+d.code));}
-  return d;
+  const url=BASE+path;
+  let lastErr;
+  for(let i=0;i<_API_PROXIES.length;i++){
+    try{return await apiOnce(_API_PROXIES[i](url),opt.method||'GET',h,opt.body);}
+    catch(e){
+      lastErr=e;
+      if(e&&e.message&&e.message.indexOf('接口错误')===0)throw e;
+    }
+  }
+  throw new Error('网络不通（已尝试直连和代理）：'+(lastErr&&lastErr.message||lastErr));
 }
 
 function setStatus(ok,txt){$('dot').className='dot'+(ok?' on':'');$('hint').textContent=txt;}
@@ -1703,9 +1723,13 @@ var FG_NEED="kb", FG_LIST=null, FG_LS="front_gate_kb";
     ok = sessionStorage.getItem("admin_auth")==="1" || sessionStorage.getItem(FG_LS)==="1";
   }catch(e){}
   if(ok){ var g=document.getElementById("frontGate"); if(g) g.remove(); return; }
-  fetch("https://raw.githubusercontent.com/phgithum/admin-console/main/accounts.json?t="+Date.now())
-    .then(function(r){return r.ok?r.json():[]}).catch(function(){return[]})
-    .then(function(j){FG_LIST=j||[];});
+  (function fgl(i){
+    var us=["https://phgithum.github.io/admin-console/accounts.json?t="+Date.now(),
+            "https://raw.githubusercontent.com/phgithum/admin-console/main/accounts.json?t="+Date.now(),
+            "https://cdn.jsdelivr.net/gh/phgithum/admin-console@main/accounts.json"];
+    fetch(us[i]).then(function(r){return r.ok?r.json():Promise.reject()})
+      .then(function(j){FG_LIST=j||[]}).catch(function(){ if(i+1<us.length) fgl(i+1); });
+  })(0);
   document.getElementById("fgP").addEventListener("keydown",function(e){ if(e.key==="Enter") fgLogin(); });
 })();
 function fgLogin(){
