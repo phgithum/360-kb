@@ -1762,19 +1762,18 @@ function gtWrite(list,ok,fail){
 function gtUnlock(){ var g=document.getElementById("frontGate"); if(g)g.remove(); }
 function gtStart(g){
   gtUnlock();
+  if(!g.base) g.base=g.exp; /* 最初3分钟试用额度，撤销授权后回落到此 */
   var b=document.createElement("div");b.id="gtBadge";
   b.style.cssText="position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(45,55,65,.88);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px";
   document.body.appendChild(b);
-  function tick(){
+  var chan="";
+  function badge(){
     var left=g.exp-Date.now();
-    if(left<=0){ try{sessionStorage.removeItem(GT.key)}catch(e){} alert("游客体验时间已结束，页面将锁定。需要继续使用请联系管理员授权。"); location.reload(); return; }
-    b.textContent="👀 游客：" + (g.name||"匿名") + " · 剩余 " + Math.floor(left/60000) + " 分 " + Math.floor(left%60000/1000) + " 秒";
+    b.textContent="👀 游客：" + (g.name||"匿名") + " · 剩余 " + Math.max(0,Math.floor(left/60000)) + " 分 " + Math.max(0,Math.floor(left%60000/1000)) + " 秒" + (chan?" · "+chan:"");
   }
-  tick(); setInterval(tick,1000);
-  /* 实时推送：连接EMQX公共通道（国内可直连），管理员一操作游客秒级收到。
-     失败也无妨——下面的轮询作为兜底继续工作。 */
-  var gtClient=null;
+  var locked=false;
   function gtLock(msg){
+    if(locked)return; locked=true;
     try{ if(gtClient){gtClient.end(true)} }catch(e){}
     try{sessionStorage.removeItem(GT.key)}catch(e){}
     var o=document.createElement("div");
@@ -1783,13 +1782,22 @@ function gtStart(g){
     document.body.appendChild(o);
     setTimeout(function(){ location.reload(); },2500);
   }
+  var gtClient=null;
+  function tick(){
+    if(locked)return;
+    var left=g.exp-Date.now();
+    if(left<=0){ gtLock("游客体验时间已结束"); return; }
+    badge();
+  }
+  tick(); setInterval(tick,1000);
+  /* 实时推送：EMQX公共通道，管理员操作秒级送达；失败由轮询兜底 */
   function gtPush(){
-    if(!window.mqtt){ b.textContent+=" · ⚠通道未加载"; return; }
+    if(!window.mqtt){ chan="⚠通道未加载"; badge(); return; }
     try{
       var c=mqtt.connect("wss://broker.emqx.io:8084/mqtt",{clientId:"gt_"+g.gid+Math.random().toString(36).slice(2,6),reconnectPeriod:8000,connectTimeout:8000,clean:true});
       gtClient=c;
-      c.on("connect",function(){ try{c.subscribe("phwork/guest/"+g.gid)}catch(e){} b.textContent=b.textContent.replace(/ · .*通道.*$/,"")+" · ⚡实时通道已连接"; });
-      c.on("reconnect",function(){ b.textContent=b.textContent.replace(/ · .*通道.*$/,"")+" · 通道重连中…"; });
+      c.on("connect",function(){ try{c.subscribe("phwork/guest/"+g.gid)}catch(e){} chan="⚡实时通道已连接"; badge(); });
+      c.on("reconnect",function(){ chan="通道重连中…"; badge(); });
       c.on("message",function(_,payload){
         try{
           var m=JSON.parse(payload.toString());
@@ -1806,9 +1814,8 @@ function gtStart(g){
             var t=new Date(m.until).getTime();
             if(t>g.exp){
               g.exp=t; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
-              b.textContent=b.textContent.replace(/ · ⚡.*$/," · ⚡实时通道已连接");
-              b.style.background="rgba(24,140,80,.92)";
-              setTimeout(function(){b.style.background="rgba(45,55,65,.88)"},1200);
+              chan="⚡已续时"; badge();
+              setTimeout(function(){ chan="⚡实时通道已连接"; badge(); },1500);
             }
           }
         }catch(e){}
@@ -1816,29 +1823,32 @@ function gtStart(g){
     }catch(e){}
   }
   gtPush();
-  /* 状态同步：快速轮询+事件触发。
-     静态页无法真推送，采用：前台可见时每4秒查一次（管理员保存后游客最多4秒生效）；
-     页面隐藏时降为30秒省接口额度；切回页面/网络恢复时立刻查一次。 */
+  /* 轮询兜底：前台4秒/隐藏30秒。关键规则——
+     有效期 = 基础试用(3分钟) 与 管理员授权取最大；授权被撤销后自动回落到基础额度，通常立即过期锁死。 */
   var gtTimer=null;
   function gtCheck(){
+    if(locked)return;
     gtRead(function(list){
       if((list.blocked||[]).indexOf(g.gid)>=0){
         gtLock("管理员已停止你的访问"); return;
       }
-      var max=g.exp;
-      (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ var t=new Date(x.until).getTime(); if(t>max)max=t; } });
+      var max=g.base;
+      var has=false;
+      (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ has=true; var t=new Date(x.until).getTime(); if(t>max)max=t; } });
+      if(!has) max=g.base; /* 授权被撤销→回落基础额度 */
+      if(max<g.exp) g.exp=max; /* 授权撤销后立刻收缩有效期 */
       if(max>g.exp){
         g.exp=max; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
-        b.textContent="✅ 管理员已延长你的使用时间";
-        setTimeout(function(){tick()},1200);
+        chan="✅ 已续时"; badge();
+        setTimeout(function(){ badge(); },1500);
       }
+      tick();
     });
   }
   function gtLoop(){
     clearTimeout(gtTimer);
-    var hidden=document.hidden;
     gtCheck();
-    gtTimer=setTimeout(gtLoop,hidden?30000:4000);
+    gtTimer=setTimeout(gtLoop,document.hidden?30000:4000);
   }
   gtLoop();
   document.addEventListener("visibilitychange",function(){ if(!document.hidden)gtCheck(); });
