@@ -163,7 +163,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <button class="mnav" id="mNavBtn" onclick="toggleNav()" aria-label="打开检索范围">☰</button>
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260910a</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260910b</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -462,6 +462,11 @@ async function viewFull(el){
     }else if(/\.(md|txt|csv)$/i.test(t)){
       const txt=new TextDecoder('utf-8').decode(await fileBuf(u));
       body.innerHTML='<pre style="padding:16px 24px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.8;font-family:inherit;max-width:860px;margin:0 auto">'+esc(txt)+'</pre>';
+    }else if(/\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(t)){
+      // 图片全文：宽度自适应弹窗，不用跳新窗口拉条
+      const buf=await fileBuf(u);
+      const ou=URL.createObjectURL(new Blob([buf],{type:imgMime(t)}));
+      body.innerHTML='<div style="padding:10px 12px;text-align:center"><img src="'+ou+'" alt="" style="display:block;max-width:100%;height:auto;margin:0 auto;border:1px solid var(--line2);border-radius:4px"></div>';
     }else{
       // 其他格式退回新窗口打开（浏览器自身能力）
       body.innerHTML='<div class="tip" style="padding:16px">该格式不支持站内直接展示，<a href="'+esc(u)+'" target="_blank" rel="noopener">点此在新窗口打开</a></div>';
@@ -1231,6 +1236,17 @@ async function dlBuf(url){
   throw new Error((err&&err.message)||'下载失败');
 }
 // 持久缓存：文件下过一次就存进浏览器 Cache Storage，重开页面/重启浏览器都秒开
+// 图片扩展名 → MIME，用于站内直接显示
+function imgMime(n){
+  const e=((n||'').split('.').pop()||'').toLowerCase();
+  return e==='jpg'||e==='jpeg'?'image/jpeg'
+    :e==='png'?'image/png'
+    :e==='webp'?'image/webp'
+    :e==='gif'?'image/gif'
+    :e==='bmp'?'image/bmp'
+    :e==='svg'?'image/svg+xml'
+    :'application/octet-stream';
+}
 async function fileBuf(url){
   try{
     if(window.caches){
@@ -1296,7 +1312,7 @@ async function renderPreview(box){
       let doc=_docCache[url];
       if(!doc){const buf=await fileBuf(url);doc=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;_docCache[url]=doc;}
       const wrap=document.createElement('div');
-      wrap.style.cssText='display:flex;gap:8px;padding:8px;overflow-x:auto;align-items:flex-start';
+      wrap.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:8px;align-items:start';
       box.innerHTML='';
       // ③ 文字优先：命中页文字版先秒出，缩略图在后台补渲染
       try{
@@ -1317,14 +1333,14 @@ async function renderPreview(box){
         try{
           const page=await doc.getPage(p);
           const vp0=page.getViewport({scale:1});
-          const tw=170; // 缩略图宽170px，按比例缩放
+          const tw=360; // 以 360px 分辨率渲染，显示时按容器宽度自适应（更清晰）
           const vp=page.getViewport({scale:tw/vp0.width});
           const cv=document.createElement('canvas');
           cv.width=vp.width;cv.height=vp.height;
-          cv.style.cssText='width:'+tw+'px;display:block;border:1px solid var(--line2);border-radius:3px;flex:none';
+          cv.style.cssText='width:100%;height:auto;display:block;border:1px solid var(--line2);border-radius:3px';
           await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
           const cell=document.createElement('div');
-          cell.style.cssText='flex:none;text-align:center';
+          cell.style.cssText='text-align:center;min-width:0';
           cell.appendChild(cv);
           const lb=document.createElement('div');
           lb.style.cssText='font-size:11px;color:#888;margin-top:2px';
@@ -1337,8 +1353,19 @@ async function renderPreview(box){
       if(!wrap.children.length)wrap.innerHTML='<span class="tip">页面渲染失败</span>';
       const tip=document.createElement('div');
       tip.className='tip';tip.style.padding='4px 8px';
-      tip.textContent='原文缩略图：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页（横向滑动查看更多）';
+      tip.textContent='原文缩略图：第 '+start+'–'+end+' 页 / 共 '+doc.numPages+' 页（自适应排列，无需左右拖动）';
       box.appendChild(tip);box.appendChild(wrap);
+      box.appendChild(prevFooter(url,name,hit0));
+      box.scrollTop=0;
+    }else if(/\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name)){
+      // 图片：站内直接显示，按容器宽度自适应，整图缩进框内（不裁剪、不拉条）
+      const buf=await fileBuf(url);
+      const ou=URL.createObjectURL(new Blob([buf],{type:imgMime(name)}));
+      box.innerHTML='';
+      const im=document.createElement('img');
+      im.src=ou;im.alt=name;
+      im.style.cssText='display:block;max-width:100%;max-height:100%;width:auto;height:auto;margin:0 auto';
+      box.appendChild(im);
       box.appendChild(prevFooter(url,name,hit0));
       box.scrollTop=0;
     }else if(/\.docx$/i.test(name)){
