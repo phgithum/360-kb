@@ -1772,6 +1772,11 @@ function gtStart(g){
   tick(); setInterval(tick,1000);
   setInterval(function(){
     gtRead(function(list){
+      if((list.blocked||[]).indexOf(g.gid)>=0){
+        try{sessionStorage.removeItem(GT.key)}catch(e){}
+        alert("管理员已停止你的访问，页面将锁定。");
+        location.reload(); return;
+      }
       var max=g.exp;
       (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ var t=new Date(x.until).getTime(); if(t>max)max=t; } });
       if(max>g.exp){ g.exp=max; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){} b.textContent="✅ 管理员已延长你的使用时间"; }
