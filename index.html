@@ -1770,7 +1770,11 @@ function gtStart(g){
     b.textContent="👀 游客：" + (g.name||"匿名") + " · 剩余 " + Math.floor(left/60000) + " 分 " + Math.floor(left%60000/1000) + " 秒";
   }
   tick(); setInterval(tick,1000);
-  setInterval(function(){
+  /* 状态同步：快速轮询+事件触发。
+     静态页无法真推送，采用：前台可见时每4秒查一次（管理员保存后游客最多4秒生效）；
+     页面隐藏时降为30秒省接口额度；切回页面/网络恢复时立刻查一次。 */
+  var gtTimer=null;
+  function gtCheck(){
     gtRead(function(list){
       if((list.blocked||[]).indexOf(g.gid)>=0){
         try{sessionStorage.removeItem(GT.key)}catch(e){}
@@ -1779,9 +1783,23 @@ function gtStart(g){
       }
       var max=g.exp;
       (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ var t=new Date(x.until).getTime(); if(t>max)max=t; } });
-      if(max>g.exp){ g.exp=max; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){} b.textContent="✅ 管理员已延长你的使用时间"; }
+      if(max>g.exp){
+        g.exp=max; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
+        b.textContent="✅ 管理员已延长你的使用时间";
+        setTimeout(function(){tick()},1200);
+      }
     });
-  },25000);
+  }
+  function gtLoop(){
+    clearTimeout(gtTimer);
+    var hidden=document.hidden;
+    gtCheck();
+    gtTimer=setTimeout(gtLoop,hidden?30000:4000);
+  }
+  gtLoop();
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden)gtCheck(); });
+  window.addEventListener("focus",gtCheck);
+  window.addEventListener("online",gtCheck);
 }
 function guestEnter(){
   var name=prompt("游客进入，可留下姓名/单位（管理员会收到邮件通知）：","")||"";
