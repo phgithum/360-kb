@@ -156,6 +156,14 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
   .logo{font-size:14px}
   header span[style]{display:none}
 }
+/* 文档渲染容器：docx/md 转出来的内容一律不横向溢出，图片、表格全部自适应宽度 */
+.doc-render{max-width:820px;margin:0 auto;overflow-wrap:break-word;word-break:break-word}
+.doc-render *{max-width:100%!important;box-sizing:border-box}
+.doc-render img{height:auto!important;display:block;margin:10px auto;border-radius:4px}
+.doc-render table{width:100%!important;border-collapse:collapse;table-layout:fixed}
+.doc-render td,.doc-render th{border:1px solid var(--line2);padding:5px 8px;word-break:break-word;overflow-wrap:anywhere;vertical-align:top}
+.doc-render pre,.doc-render code{white-space:pre-wrap!important;word-break:break-word}
+.doc-render p,.doc-render h1,.doc-render h2,.doc-render h3,.doc-render h4{margin:10px 0;line-height:1.8}
 </style>
 </head>
 <body data-page-node-id="9jljvZvX2QEgjmX4DsvOHJ">
@@ -163,7 +171,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 <header data-page-node-id="y3om5WO4ySzKAMMcz98tOX">
   <button class="mnav" id="mNavBtn" onclick="toggleNav()" aria-label="打开检索范围">☰</button>
   <div class="logo" data-page-node-id="tYZtya3N4dmUCaT59ytPkZ">知识库检索台</div>
-  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260910b</span>
+  <span style="font-size:11px;background:var(--main);color:#fff;border-radius:8px;padding:1px 8px;margin-left:6px">V20260910c</span>
   <div class="dot" id="dot" data-page-node-id="pWkcFpcTOvzr3ZFuLvhlCH"></div>
   <div class="hint" id="hint" data-page-node-id="b7p97zMuEk4Z5MWC5bYWjJ">未连接</div>
   <div class="spacer" data-page-node-id="VlVO7Cd8GSuqIHs3Eqiqzs"></div>
@@ -458,10 +466,10 @@ async function viewFull(el){
     }else if(/\.docx$/i.test(t)){
       await loadMammoth();
       const d=await window.mammoth.convertToHtml({arrayBuffer:await fileBuf(u)});
-      body.innerHTML='<div style="padding:16px 24px;font-size:14px;line-height:1.9;max-width:860px;margin:0 auto">'+(d.value||'<span class="tip">此文档没有可显示的文本内容</span>')+'</div>';
+      body.innerHTML='<div class="doc-render" style="padding:16px 20px;font-size:14px;line-height:1.9">'+(d.value||'<span class="tip">此文档没有可显示的文本内容</span>')+'</div>';
     }else if(/\.(md|txt|csv)$/i.test(t)){
       const txt=new TextDecoder('utf-8').decode(await fileBuf(u));
-      body.innerHTML='<pre style="padding:16px 24px;margin:0;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.8;font-family:inherit;max-width:860px;margin:0 auto">'+esc(txt)+'</pre>';
+      body.innerHTML='<pre class="doc-render" style="padding:16px 20px;margin:0 auto;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.8;font-family:inherit">'+esc(txt)+'</pre>';
     }else if(/\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(t)){
       // 图片全文：宽度自适应弹窗，不用跳新窗口拉条
       const buf=await fileBuf(u);
@@ -1373,7 +1381,8 @@ async function renderPreview(box){
       const buf=await fileBuf(url);
       const d=await window.mammoth.convertToHtml({arrayBuffer:buf});
       const wrap=document.createElement('div');
-      wrap.style.cssText='padding:12px 16px;font-size:13.5px;line-height:1.8';
+      wrap.className='doc-render';
+      wrap.style.cssText='padding:12px 14px;font-size:13.5px;line-height:1.8';
       wrap.innerHTML=d.value||'<span class="tip">此文档没有可显示的文本内容</span>';
       box.innerHTML='';box.appendChild(wrap);
       const tip=document.createElement('div');
