@@ -1801,12 +1801,9 @@ function guestEnter(){
         _subject:"🔔 游客访问通知 · 知识库 · "+(name||"匿名"),
         "游客":(name||"匿名")+"（进入页面："+GT.site+"）",
         "时间":new Date().toLocaleString("zh-CN",{hour12:false}),
-        "—点链接直接操作—（点开即生效，25秒内对游客生效）":"",
-        "① 延长30分钟":ACT+"&do=grant&mins=30",
-        "② 延长2小时":ACT+"&do=grant&mins=120",
-        "③ 延长24小时":ACT+"&do=grant&mins=1440",
-        "④ 停止该游客":ACT+"&do=block",
-        "更多操作":"https://phgithum.github.io/admin-console/（游客授权页）"
+        "⚡ 处理该游客（点开选时长/停止，保存即生效）":ACT+"&do=menu",
+        "备用-延长24小时":ACT+"&do=grant&mins=1440",
+        "备用-直接停止":ACT+"&do=block"
       })
     }).then(function(r){ if(r.ok){ rec.notified=true; gtWrite(list,function(){},function(){}); } }).catch(function(){});
   });
