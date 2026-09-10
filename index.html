@@ -1728,8 +1728,9 @@ loadMammoth().catch(()=>{});
 <button onclick="fgLogin()" style="width:100%;padding:10px;border:none;border-radius:8px;background:#2f6fed;color:#fff;font-size:14px;cursor:pointer">进 入</button>
 <button onclick="guestEnter()" style="width:100%;padding:8px;margin-top:10px;border:1px solid #e5e8ef;border-radius:8px;background:#fff;color:#667;font-size:13px;cursor:pointer">游客进入（可试用 3 分钟）</button>
 </div></div>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5/dist/mqtt.min.js"></script>
 <script>
-/* ===== 游客模式模块（cloud-db guests.json + 邮件通知 + 后台授权续时） ===== */
+/* ===== 游客模式模块（cloud-db guests.json + 邮件通知 + 后台授权续时 + 实时推送） ===== */
 var GT={"site":"知识库","tok":"ghp_MjkBxQwkydhgmw7TxpItxQrNhtXKsO1sA"+"wRS","key":"guest_kb"};
 function gtH(){return{"Authorization":"Bearer "+GT.tok,"Accept":"application/vnd.github+json","Content-Type":"application/json","User-Agent":"guest"}}
 function gtB64(s){return decodeURIComponent(escape(atob(s.replace(/\s/g,""))))}
@@ -1770,6 +1771,33 @@ function gtStart(g){
     b.textContent="👀 游客：" + (g.name||"匿名") + " · 剩余 " + Math.floor(left/60000) + " 分 " + Math.floor(left%60000/1000) + " 秒";
   }
   tick(); setInterval(tick,1000);
+  /* 实时推送：连接EMQX公共通道（国内可直连），管理员一操作游客秒级收到。
+     失败也无妨——下面的轮询作为兜底继续工作。 */
+  function gtPush(){
+    if(!window.mqtt)return;
+    try{
+      var c=mqtt.connect("wss://broker.emqx.io:8084/mqtt",{clientId:"gt_"+g.gid+Math.random().toString(36).slice(2,6),reconnectPeriod:8000,connectTimeout:8000,clean:true});
+      c.on("connect",function(){ try{c.subscribe("phwork/guest/"+g.gid)}catch(e){} });
+      c.on("message",function(_,payload){
+        try{
+          var m=JSON.parse(payload.toString());
+          if(m.action==="stop"){
+            try{sessionStorage.removeItem(GT.key)}catch(e){}
+            try{c.end(true)}catch(e){}
+            alert("管理员已停止你的访问，页面将锁定。");
+            location.reload(); return;
+          }
+          if(m.action==="extend"&&m.until){
+            var t=new Date(m.until).getTime();
+            if(t>g.exp){
+              g.exp=t; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
+            }
+          }
+        }catch(e){}
+      });
+    }catch(e){}
+  }
+  gtPush();
   /* 状态同步：快速轮询+事件触发。
      静态页无法真推送，采用：前台可见时每4秒查一次（管理员保存后游客最多4秒生效）；
      页面隐藏时降为30秒省接口额度；切回页面/网络恢复时立刻查一次。 */
