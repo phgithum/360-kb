@@ -1773,24 +1773,34 @@ function gtStart(g){
   tick(); setInterval(tick,1000);
   /* 实时推送：连接EMQX公共通道（国内可直连），管理员一操作游客秒级收到。
      失败也无妨——下面的轮询作为兜底继续工作。 */
+  var gtClient=null;
+  function gtLock(msg){
+    try{ if(gtClient){gtClient.end(true)} }catch(e){}
+    try{sessionStorage.removeItem(GT.key)}catch(e){}
+    var o=document.createElement("div");
+    o.style.cssText="position:fixed;inset:0;z-index:999999;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px";
+    o.innerHTML='<div style="font-size:44px">🔒</div><div style="font-size:17px;font-weight:700;color:#333">'+msg+'</div><div style="font-size:13px;color:#889">如需继续使用，请联系管理员重新授权。</div>';
+    document.body.appendChild(o);
+    setTimeout(function(){ location.reload(); },2500);
+  }
   function gtPush(){
-    if(!window.mqtt)return;
+    if(!window.mqtt){ b.textContent+=" · ⚠通道未加载"; return; }
     try{
       var c=mqtt.connect("wss://broker.emqx.io:8084/mqtt",{clientId:"gt_"+g.gid+Math.random().toString(36).slice(2,6),reconnectPeriod:8000,connectTimeout:8000,clean:true});
-      c.on("connect",function(){ try{c.subscribe("phwork/guest/"+g.gid)}catch(e){} });
+      gtClient=c;
+      c.on("connect",function(){ try{c.subscribe("phwork/guest/"+g.gid)}catch(e){} b.textContent=b.textContent.replace(/ · .*通道.*$/,"")+" · ⚡实时通道已连接"; });
+      c.on("reconnect",function(){ b.textContent=b.textContent.replace(/ · .*通道.*$/,"")+" · 通道重连中…"; });
       c.on("message",function(_,payload){
         try{
           var m=JSON.parse(payload.toString());
-          if(m.action==="stop"){
-            try{sessionStorage.removeItem(GT.key)}catch(e){}
-            try{c.end(true)}catch(e){}
-            alert("管理员已停止你的访问，页面将锁定。");
-            location.reload(); return;
-          }
+          if(m.action==="stop"){ gtLock("管理员已停止你的访问"); return; }
           if(m.action==="extend"&&m.until){
             var t=new Date(m.until).getTime();
             if(t>g.exp){
               g.exp=t; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
+              b.textContent=b.textContent.replace(/ · ⚡.*$/," · ⚡实时通道已连接");
+              b.style.background="rgba(24,140,80,.92)";
+              setTimeout(function(){b.style.background="rgba(45,55,65,.88)"},1200);
             }
           }
         }catch(e){}
@@ -1805,9 +1815,7 @@ function gtStart(g){
   function gtCheck(){
     gtRead(function(list){
       if((list.blocked||[]).indexOf(g.gid)>=0){
-        try{sessionStorage.removeItem(GT.key)}catch(e){}
-        alert("管理员已停止你的访问，页面将锁定。");
-        location.reload(); return;
+        gtLock("管理员已停止你的访问"); return;
       }
       var max=g.exp;
       (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ var t=new Date(x.until).getTime(); if(t>max)max=t; } });
