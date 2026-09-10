@@ -1726,7 +1726,81 @@ loadMammoth().catch(()=>{});
 <input id="fgU" placeholder="账户" style="width:100%;padding:10px 12px;border:1px solid #e5e8ef;border-radius:8px;font-size:14px;margin-bottom:12px;outline:none;box-sizing:border-box">
 <input id="fgP" type="password" placeholder="密码" style="width:100%;padding:10px 12px;border:1px solid #e5e8ef;border-radius:8px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box">
 <button onclick="fgLogin()" style="width:100%;padding:10px;border:none;border-radius:8px;background:#2f6fed;color:#fff;font-size:14px;cursor:pointer">进 入</button>
+<button onclick="guestEnter()" style="width:100%;padding:8px;margin-top:10px;border:1px solid #e5e8ef;border-radius:8px;background:#fff;color:#667;font-size:13px;cursor:pointer">游客进入（可试用 3 分钟）</button>
 </div></div>
+<script>
+/* ===== 游客模式模块（cloud-db guests.json + 邮件通知 + 后台授权续时） ===== */
+var GT={"site":"知识库","tok":"ghp_MjkBxQwkydhgmw7TxpItxQrNhtXKsO1sA"+"wRS","key":"guest_kb"};
+function gtH(){return{"Authorization":"Bearer "+GT.tok,"Accept":"application/vnd.github+json","Content-Type":"application/json","User-Agent":"guest"}}
+function gtB64(s){return decodeURIComponent(escape(atob(s.replace(/\s/g,""))))}
+function gtRead(cb){
+  fetch("https://api.github.com/repos/phgithum/cloud-db/contents/guests.json",{headers:gtH()})
+    .then(function(r){if(!r.ok)throw 0;return r.json()})
+    .then(function(j){GT.sha=j.sha;try{cb(JSON.parse(gtB64(j.content))||{requests:[],grants:[]})}catch(e){cb({requests:[],grants:[]})}})
+    .catch(function(){
+      fetch("https://raw.githubusercontent.com/phgithum/cloud-db/main/guests.json?t="+Date.now())
+        .then(function(r){return r.ok?r.json():Promise.reject()}).then(cb)
+        .catch(function(){
+          fetch("https://cdn.jsdelivr.net/gh/phgithum/cloud-db@main/guests.json").then(function(r){return r.json()}).then(cb).catch(function(){cb({requests:[],grants:[]})});
+        });
+    });
+}
+function gtWrite(list,ok,fail){
+  function put(sha){
+    fetch("https://api.github.com/repos/phgithum/cloud-db/contents/guests.json",{
+      method:"PUT",headers:gtH(),
+      body:JSON.stringify({message:"guests update",branch:"main",
+        content:btoa(unescape(encodeURIComponent(JSON.stringify(list,null,2)))),sha:sha||undefined})
+    }).then(function(r){ if(r.ok){gtRead(function(){}); (ok||function(){})()} else (fail||function(){})(r.status) })
+      .catch(function(e){(fail||function(){})(e)});
+  }
+  if(GT.sha){put(GT.sha);return}
+  fetch("https://api.github.com/repos/phgithum/cloud-db/contents/guests.json",{headers:gtH()})
+    .then(function(r){return r.ok?r.json():{}}).then(function(j){GT.sha=j.sha;put(j.sha)}).catch(function(){put()});
+}
+function gtUnlock(){ var g=document.getElementById("frontGate"); if(g)g.remove(); }
+function gtStart(g){
+  gtUnlock();
+  var b=document.createElement("div");b.id="gtBadge";
+  b.style.cssText="position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(45,55,65,.88);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px";
+  document.body.appendChild(b);
+  function tick(){
+    var left=g.exp-Date.now();
+    if(left<=0){ try{sessionStorage.removeItem(GT.key)}catch(e){} alert("游客体验时间已结束，页面将锁定。需要继续使用请联系管理员授权。"); location.reload(); return; }
+    b.textContent="👀 游客：" + (g.name||"匿名") + " · 剩余 " + Math.floor(left/60000) + " 分 " + Math.floor(left%60000/1000) + " 秒";
+  }
+  tick(); setInterval(tick,1000);
+  setInterval(function(){
+    gtRead(function(list){
+      var max=g.exp;
+      (list.grants||[]).forEach(function(x){ if(x.gid===g.gid){ var t=new Date(x.until).getTime(); if(t>max)max=t; } });
+      if(max>g.exp){ g.exp=max; try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){} b.textContent="✅ 管理员已延长你的使用时间"; }
+    });
+  },25000);
+}
+function guestEnter(){
+  var name=prompt("游客进入，可留下姓名/单位（管理员会收到邮件通知）：","")||"";
+  var gid="g"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  var g={gid:gid,name:name,site:GT.site,exp:Date.now()+3*60*1000};
+  try{sessionStorage.setItem(GT.key,JSON.stringify(g))}catch(e){}
+  gtRead(function(list){
+    list.requests=list.requests||[];
+    var rec={gid:gid,name:name,site:GT.site,time:new Date().toISOString(),notified:false};
+    list.requests.push(rec);
+    gtWrite(list,function(){},function(){});
+    /* 直接发邮件通知（formsubmit 免费转发，首次使用需点一次激活邮件） */
+    fetch("https://formsubmit.co/ajax/2339553665@qq.com",{
+      method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({_subject:"🔔 游客访问通知 · 知识库","姓名/单位":name||"匿名","访问编号":gid,"时间":new Date().toLocaleString("zh-CN",{hour12:false}),"提示":"如需延长该游客使用时间，请到聚合后台 → 游客授权 操作"})
+    }).then(function(r){ if(r.ok){ rec.notified=true; gtWrite(list,function(){},function(){}); } }).catch(function(){});
+  });
+  gtStart(g);
+}
+(function(){
+  var g=null; try{g=JSON.parse(sessionStorage.getItem(GT.key))}catch(e){}
+  if(g&&g.exp&&g.exp>Date.now()) gtStart(g);
+})();
+</script>
 <script>
 /* 前台门禁：签发账户（需勾选本站权限）或超管可用；聚合后台登录后自动放行 */
 var FG_NEED="kb", FG_LIST=null, FG_LS="front_gate_kb";
